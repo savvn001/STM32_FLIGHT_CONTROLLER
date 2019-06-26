@@ -8,7 +8,6 @@
 #include "IMU.h"
 #include "stm32f4xx_hal.h"
 
-
 I2C_HandleTypeDef hi2c2;
 UART_HandleTypeDef huart2;
 
@@ -52,7 +51,7 @@ int delt_t = 0; // used to control display output rate
 int count = 0;  // used to control display output rate
 
 // parameters for 6 DoF sensor fusion calculations
-#define PI 3.14159265358979323846
+#define PI 3.14159265358979323846 //PI DEFINED IN arm_math.h
 float GyroMeasError = PI * (60.0f / 180.0f); // gyroscope measurement error in rads/s (start at 60 deg/s), then reduce after ~10 s to 3
 float beta = sqrt(3.0f / 4.0f) * PI * (60.0f / 180.0f);  // compute beta
 float GyroMeasDrift = PI * (1.0f / 180.0f); // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
@@ -179,7 +178,7 @@ void calc_RollPitchYaw(int counter_value) {
 
 	Now = counter_value;
 	//Formula for getting timer count into seconds = COUNT * (1/TIMER_CLK)*PRESCALER
-	deltat = (float) ((Now - lastUpdate) * (1 / (84000000.0f / 65535.0f))); // set integration time by time elapsed since last filter update
+	deltat = (float) ((Now - lastUpdate) * (1 / (84000000.0f / 2000.0f))); // set integration time by time elapsed since last filter update
 	lastUpdate = Now;
 
 	sum += deltat;
@@ -206,6 +205,7 @@ void calc_RollPitchYaw(int counter_value) {
 	yaw *= 180.0 / PI;
 	yaw -=  -1.1; // CHANGE-> (In Leeds, UK declination = -1.1) ... Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04 (+13.8)
 	roll *= 180.0 / PI;
+
 
 
 	sum = 0;

@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include "math.h"
 
+
 #define MPU9250_ADDRESS_TX 0xD0 //NICK - These include R/W bit on ends
 #define MPU9250_ADDRESS_RX 0xD1
 

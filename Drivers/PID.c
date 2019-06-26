@@ -12,8 +12,8 @@
 //The receiver value is the desired orientation
 float receiver = 0;
 //PID gain values
-float roll_p_gain = 1;
-float roll_i_gain = 0.;
+float roll_p_gain = 7;
+float roll_i_gain = 0;
 float roll_d_gain = 0;
 
 float roll_setpoint = 0;
@@ -39,18 +39,19 @@ float pid_calculate_roll(float IMU_roll_value, int timer_value) {
 	//Proportional component
 	roll_p = roll_p_gain*roll_error;
 
+	//Integral
+	roll_i += (roll_i_gain*roll_error);
 
 	//Derivative component
 	now = timer_value;
 	//Elaspsed time in seconds from counter value = (ticks) * (1/ (timer clk freq / prescaler value))
-	float elapsed_time  = (float) ((now - last_update) * (1 / (84000000.0f / 65535.0f)));
+	float elapsed_time  = (float) ((now - last_update) * (1 / (84000000.0f / 2000.0f)));
 	roll_d = roll_d_gain * ( (roll_error - roll_last_d_error) / elapsed_time);
 	last_update = now;
 	roll_last_d_error = roll_error;
 
 
-	//Integral, error over time
-	roll_i += (roll_i_gain*roll_error);
+
 
 //	//Limit max output to prevent extreme swings
 //	if (roll_i_mem > roll_p_gain_max)
@@ -60,6 +61,10 @@ float pid_calculate_roll(float IMU_roll_value, int timer_value) {
 
 	//PID together
 	roll_output = roll_p + roll_i + roll_d;
+
+
+	if(roll_output < -400){roll_output=-400;}
+	    if(roll_output > 400) {roll_output=400; }
 
 //	if (roll_output > roll_p_gain_max)
 //		roll_output = roll_p_gain_max;
