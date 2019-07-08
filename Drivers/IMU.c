@@ -8,8 +8,9 @@
 #include "IMU.h"
 #include "stm32f4xx_hal.h"
 
+#define TIMER_CLK_FREQ 100000000
+
 I2C_HandleTypeDef hi2c2;
-UART_HandleTypeDef huart2;
 
 float sum = 0;
 uint32_t sumCount = 0, mcount = 0;
@@ -177,9 +178,22 @@ void calc_RollPitchYaw(int counter_value) {
 	}
 
 	Now = counter_value;
-	//Formula for getting timer count into seconds = COUNT * (1/TIMER_CLK)*PRESCALER
-	deltat = (float) ((Now - lastUpdate) * (1 / (84000000.0f / 2000.0f))); // set integration time by time elapsed since last filter update
+
+	//This will happen when the timer takes a reading, then the next reading is after
+	//the timer has reset, ie gone back to 0 and started counting up again
+	if(Now - lastUpdate < 0){
+		//Take time difference taking into account reset of timer
+		//Formula for getting timer count into seconds = COUNT * (1/TIMER_CLK)*PRESCALER
+		deltat = (float) (((65535-lastUpdate)+Now) * (1 / (100000000.0f / 2000.0f)));
+
+	}
+	else{
+	//Otherwise normally the count difference will be positive
+	deltat = (float) ((Now - lastUpdate) * (1 / (100000000.0f / 2000.0f))); // set integration time by time elapsed since last filter update
+	}
+
 	lastUpdate = Now;
+
 
 	sum += deltat;
 	sumCount++;
@@ -206,8 +220,6 @@ void calc_RollPitchYaw(int counter_value) {
 	yaw -=  -1.1; // CHANGE-> (In Leeds, UK declination = -1.1) ... Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04 (+13.8)
 	roll *= 180.0 / PI;
 
-
-
 	sum = 0;
 	sumCount = 0;
 
@@ -228,52 +240,17 @@ float get_yaw(){
 	return yaw;
 }
 
-void printftest() {
-
-	printf("HI..\r\n");
-
-	/*** Output values for debugging ****/
-
-	printf("Yaw = %f Pitch = %f Roll = %f \n\r", yaw, pitch, roll);
-	//printf("accel z = %f gyro z = %f mag z = %f \n\r", az, gz, mz);
-
-
-	//tempCount = readTempData();  // Read the adc values
-	//temperature = ((float) tempCount) / 333.87f + 21.0f; // Temperature in degrees Centigrade
-	//printf(" temperature = %f  C\n\r", temperature);
-
-}
 
 //Triggered by timer3 interrupt every time timer reaches 0 (autoreload)
 void timer_reset(){
 
-	deltat = 0;
-    lastUpdate = Now;
+//	deltat = 0;
+//    lastUpdate = Now;
 
 
 }
 
-/*
- *	Some functions to allow the program to use printf,
- *	adapted from http://www.emcu.eu/how-to-implement-printf-for-send-message-via-usb-on-stm32-nucleo-boards-using-atollic/
- *
- */
-int __io_putchar(int ch) {
-	uint8_t c[1];
-	c[0] = ch & 0x00FF;
 
-
-	HAL_UART_Transmit(&huart2, &*c, 1, 10);
-	return ch;
-}
-
-int _write(int file, char *ptr, int len) {
-	int DataIdx;
-	for (DataIdx = 0; DataIdx < len; DataIdx++) {
-		__io_putchar(*ptr++);
-	}
-	return len;
-}
 
 //===================================================================================================================
 //====== Set of useful function to access acceleration, gyroscope, and temperature data
