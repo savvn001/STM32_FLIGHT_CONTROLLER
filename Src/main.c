@@ -27,6 +27,7 @@
 #include "../Drivers/IMU.h"
 #include "../Drivers/PID.h"
 #include <stdbool.h>
+#include "arm_math.h"
 
 /* USER CODE END Includes */
 
@@ -34,10 +35,13 @@
 /* USER CODE BEGIN PTD */
 //Min and max counter load value for timer4, which handles PWM generation. ESC_MIN = 125us pulse
 //and ESC_MAX = 250us pulse (OneShot125 protocol)
-#define ESC_MIN 1060
-#define ESC_MAX 2130
+#define ESC_MIN 2540
+#define ESC_MAX 5080
 //How many of same pulse to send before updating with new value
-#define PULSE_DIV 7
+#define PULSE_DIV 4
+/*If doing PID tuning and want to store IMU readings in a buffer to print to
+ * a PC later enable */
+#define PID_TUNE_DEBUG 0
 
 /* USER CODE END PTD */
 
@@ -85,6 +89,24 @@ int pulse_count = 0;
 
 bool main_loop = 0;
 
+/** For debugging and tuning PID control, data storage buffer for
+ *  printing afterwards to evaluate system response, can comment out later to save RAM
+ *  if needed (approx 20k needed?)
+ */
+#if PID_TUNE_DEBUG
+
+int samples_to_take = 5000;
+float PID_print_buffer [5000];
+int print_buffer_index = 0;
+
+#endif
+
+/*** Set up structures for PID control using DSP library ***/
+
+arm_pid_instance_f32 pid_pitch_gains;
+arm_pid_instance_f32 pid_roll_gains;
+arm_pid_instance_f32 pid_yaw_gains;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -104,14 +126,14 @@ void PWM2_Set(uint16_t value);
 void PWM3_Set(uint16_t value);
 void PWM4_Set(uint16_t value);
 
-void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim);
+void pulse_complete_handler();
 
-void user_pwm_setvalue(uint16_t value);
+void print_data_to_pc();
+void update_PID_values();
 
 long map(long x, long in_min, long in_max, long out_min, long out_max);
 int __io_putchar(int ch);
 int _write(int file, char *ptr, int len);
-void print_imu();
 
 /* USER CODE END PFP */
 
@@ -169,23 +191,32 @@ int main(void)
 	//Start timer 3 in interrupt mode, used for integral calculations
 	HAL_TIM_Base_Start_IT(&htim3);
 
+	/* ESCs arming sequence */
 
-	//ESC arming sequence
-
-
-
-
+	//Start up PWMs
 	HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_1);
 	HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_2);
 	HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_3);
 	HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_4);
 
-	//ARM_ESCs();
+	ARM_ESCs();
 
-	PWM1_Set(ESC_MIN+100); //Send lowest value (125us pulse)
-	PWM2_Set(ESC_MIN+100); //Send lowest value (125us pulse)
-	PWM3_Set(ESC_MIN+100); //Send lowest value (125us pulse)
-	PWM4_Set(ESC_MIN+100); //Send lowest value (125us pulse)
+	PWM1_Set(ESC_MIN + 500);
+	PWM2_Set(ESC_MIN + 500);
+	PWM3_Set(ESC_MIN + 500);
+	PWM4_Set(ESC_MIN + 500);
+
+	/* Init DSP Library PID functions*/
+
+	pid_pitch_gains.Kp = 5;
+	pid_pitch_gains.Ki = 0.02;
+	pid_pitch_gains.Kd = 0;
+
+	arm_pid_init_f32(&pid_pitch_gains, 0);
+
+	/* Roll */
+
+	/* Yaw */
 
 
 
@@ -200,39 +231,45 @@ int main(void)
 
 		/** Main control loop **/
 
-		/*  On every falling edge of a PWM signal pulse, the function 'HAL_TIM_PWM_PulseFinishedCallback'
-		 * will trigger, raising the getRPY_flag, indicating here to calculate the roll, pitch
-		 *  & yaw values needed from the IMU readings and work out the required PWM value for
-		 *  each ESC which will be set on the next rising edge
-		 */
 
-		//On every rising edge of ESC PWM signal, flag set from IRQ handler
+		//After falling edge of ESC PWM signal, flag set from IRQ handler
 		if (getRPY_flag) {
 
-			timer1 = htim3.Instance->CNT;
+			//timer1 = htim3.Instance->CNT;
 
 			count = htim3.Instance->CNT; //read TIM3 counter value
-
 			calc_RollPitchYaw(count);
 
-
+			//Roll PID calculation
 			imu_roll = get_roll();
-			imu_pitch = get_pitch();
-
-			count = htim3.Instance->CNT;
+			//count = htim3.Instance->CNT;
 			//pid_output_roll = pid_calculate_roll(imu_roll, count);
-			count = htim3.Instance->CNT;
-			pid_output_pitch =  pid_calculate_pitch(imu_pitch, count);
 
-			print_imu();
+			//Pitch PID calculation
+			imu_pitch = get_pitch();
+			//count = htim3.Instance->CNT;
+			pid_output_pitch = pid_calculate_pitch(imu_pitch, count);
+			//pid_output_pitch = arm_pid_f32(&pid_pitch_gains, imu_pitch);
 
-			timer2 = htim3.Instance->CNT;
-			difference = timer2 - timer1;
+			#if PID_TUNE_DEBUG
+			/*** For tuning PID, store in buffer to print to PC later ***/
+			if(print_buffer_index < samples_to_take){
+			PID_print_buffer[print_buffer_index] = imu_pitch;
+			print_buffer_index++;
+			}
+			else{
+				//After n number of samples logged into buffer, print out to PC
+				print_buffer_index = 0;
+				print_data_to_pc();
+			}
+			#endif
 
+
+
+			//timer2 = htim3.Instance->CNT;
+			//difference = timer2 - timer1;
 
 			getRPY_flag = 0;
-
-
 
 		}
 
@@ -385,9 +422,9 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 9;
+  htim4.Init.Prescaler = 4;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 8000;
+  htim4.Init.Period = 10000;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
@@ -412,7 +449,7 @@ static void MX_TIM4_Init(void)
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
   sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  sConfigOC.OCFastMode = TIM_OCFAST_ENABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
@@ -554,78 +591,76 @@ void PWM4_Set(uint16_t value) {
 }
 
 //This is called when each PWM pulse finishes, ie the falling edge of each pulse
-void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim) {
+void pulse_complete_handler() {
 
-	if (pulse_count < PULSE_DIV) {
-		pulse_count++;
-	} else {
-		//After n pulses reset to 0
-		pulse_count = 0;
+	//Only want this to happen in main loop - not during init sequence
+	if (main_loop) {
+
+		switch (pulse_count) {
+
+		//Last pulse before returning to 0
+		case PULSE_DIV - 1:
+
+			//Calculate new pulse width values
+			esc1_total = ESC_MIN + esc1_throttle + pid_output_pitch;
+			esc2_total = ESC_MIN + esc2_throttle + pid_output_pitch;
+			esc3_total = ESC_MIN + esc3_throttle - pid_output_pitch;
+			esc4_total = ESC_MIN + esc4_throttle - pid_output_pitch;
+
+			//Clip PWM values to make sure they don't go outside of range
+			if (esc1_total < ESC_MIN) {
+				esc1_total = ESC_MIN;
+			}
+			if (esc1_total > ESC_MAX) {
+				esc1_total = ESC_MAX;
+			}
+			if (esc2_total < ESC_MIN) {
+				esc2_total = ESC_MIN;
+			}
+			if (esc2_total > ESC_MAX) {
+				esc2_total = ESC_MAX;
+			}
+			if (esc3_total < ESC_MIN) {
+				esc3_total = ESC_MIN;
+			}
+			if (esc3_total > ESC_MAX) {
+				esc3_total = ESC_MAX;
+			}
+			if (esc4_total < ESC_MIN) {
+				esc4_total = ESC_MIN;
+			}
+			if (esc4_total > ESC_MAX) {
+				esc4_total = ESC_MAX;
+			}
+
+			PWM1_Set(esc1_total); //PWM1 = Back left, CW
+			PWM2_Set(esc2_total); //PWM2 = Front left, CCW
+			PWM3_Set(esc3_total); //PWM3 = Back right, CCW
+			PWM4_Set(esc4_total); //PWM4 = Front right, CW
+
+			pulse_count = 0;
+
+			break;
+
+			//First pulse
+		case 0:
+			HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_0);
+			getRPY_flag = 1;
+			pulse_count++;
+			break;
+
+		default:
+			pulse_count++;
+
+			break;
+		}
+
 	}
 
-	//Pulse count = 0, first pulse sent, begin calculating RPY
-	if (htim->Instance == TIM4 && pulse_count == 0 && main_loop) {
-		getRPY_flag = 1;
-	}
-
-	//Last pulse before setting new value, load new value into registers
-	if (htim->Instance == TIM4 && pulse_count == PULSE_DIV - 1 && main_loop) {
-
-		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_0); //Does this go high/low?
-
-		esc1_total = ESC_MIN + esc1_throttle + pid_output_pitch;
-		esc2_total = ESC_MIN + esc2_throttle + pid_output_pitch;
-		esc3_total = ESC_MIN + esc3_throttle - pid_output_pitch;
-		esc4_total = ESC_MIN + esc4_throttle - pid_output_pitch;
-
-
-		//Clip PWM values to make sure they don't go over range
-		if (esc1_total < ESC_MIN) {
-			esc1_total = ESC_MIN;
-		}
-		if (esc1_total > ESC_MAX) {
-			esc1_total = ESC_MAX;
-		}
-		if (esc2_total < ESC_MIN) {
-			esc2_total = ESC_MIN;
-		}
-		if (esc2_total > ESC_MAX) {
-			esc2_total = ESC_MAX;
-		}
-		if (esc3_total < ESC_MIN) {
-			esc3_total = ESC_MIN;
-		}
-		if (esc3_total > ESC_MAX) {
-			esc3_total = ESC_MAX;
-		}
-		if (esc4_total < ESC_MIN) {
-			esc4_total = ESC_MIN;
-		}
-		if (esc4_total > ESC_MAX) {
-			esc4_total = ESC_MAX;
-		}
-
-//		PWM1_Set(esc1_total); //PWM1 = Back left, CW
-//		PWM2_Set(esc2_total); //PWM2 = Front left, CCW
-//		PWM3_Set(esc3_total); //PWM3 = Back right, CCW
-//		PWM4_Set(esc4_total); //PWM4 = Front right, CW
-	}
 }
 
 long map(long x, long in_min, long in_max, long out_min, long out_max) {
 	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
-
-void user_pwm_setvalue(uint16_t value)
-{
-    TIM_OC_InitTypeDef sConfigOC;
-
-    sConfigOC.OCMode = TIM_OCMODE_PWM1;
-    sConfigOC.Pulse = value;
-    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-    HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_1);
-    HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
 }
 
 
@@ -637,7 +672,6 @@ void user_pwm_setvalue(uint16_t value)
 int __io_putchar(int ch) {
 	uint8_t c[1];
 	c[0] = ch & 0x00FF;
-
 
 	HAL_UART_Transmit(&huart2, &*c, 1, 10);
 	return ch;
@@ -651,31 +685,29 @@ int _write(int file, char *ptr, int len) {
 	return len;
 }
 
-void printftest() {
+void print_data_to_pc(){
 
-	printf("HI..\r\n");
+	#if PID_TINE_DEBUG
 
-	/*** Output values for debugging ****/
+	for (int i = 0; i < samples_to_take; ++i) {
 
-	//printf("Yaw = %f Pitch = %f Roll = %f \n\r", yaw, pitch, roll);
-	//printf("accel z = %f gyro z = %f mag z = %f \n\r", az, gz, mz);
+		printf("%f\r\n", PID_print_buffer[i]);
 
-
-	//tempCount = readTempData();  // Read the adc values
-	//temperature = ((float) tempCount) / 333.87f + 21.0f; // Temperature in degrees Centigrade
-	//printf(" temperature = %f  C\n\r", temperature);
-
-}
-
-
-void print_imu(){
-
-	if(main_loop){
-		printf("%f\r\n", imu_pitch);
 	}
 
+	update_PID_values();
+
+	#endif
+
 }
 
+void update_PID_values(){
+
+	pid_pitch_gains.Kp;
+	pid_pitch_gains.Ki;
+	pid_pitch_gains.Kd;
+
+}
 
 
 /* USER CODE END 4 */

@@ -7,7 +7,7 @@
 
 #include "PID.h"
 
-#define TIMER_CLK_FREQ 84000000.0f
+#define TIMER_CLK_FREQ 100000000.0f
 
 
 
@@ -72,9 +72,9 @@ float pid_calculate_roll(float IMU_roll_value, int timer_value) {
 //Pitch Axis PID control variables
 
 //PID gain values
-float pitch_p_gain = 3.2; //2.8
-float pitch_i_gain = 0.002; //0.002
-float pitch_d_gain = 0.1; //0.1
+float pitch_p_gain = 15; //2.8
+float pitch_i_gain = 0.05;//0.002; //0.002
+float pitch_d_gain = 0; //0.1
 
 float pitch_setpoint = 0;
 float pitch_p_gain_max = 400; //Set a maximum value to prevent extreme outputs
@@ -103,12 +103,12 @@ float pid_calculate_pitch(float IMU_pitch_value, int timer_value) {
 	//Integral
 	pitch_i += (pitch_i_gain * pitch_error);
 
-	//Clip i component?
+	/*//Clip i component?
 		if (pitch_i < -800) {
 			pitch_i = -800;
 		} else if (pitch_i > 800) {
 			pitch_i = 800;
-		}
+		}*/
 
 	//Derivative component
 	pitch_now = timer_value;
@@ -132,10 +132,10 @@ float pid_calculate_pitch(float IMU_pitch_value, int timer_value) {
 	pitch_output = pitch_p + pitch_i + pitch_d;
 
 	//Clip PID output in event of extreme swings
-	if (pitch_output < -800) {
-		pitch_output = -800;
-	} else if (pitch_output > 800) {
-		pitch_output = 800;
+	if (pitch_output < -2000) {
+		pitch_output = -2000;
+	} else if (pitch_output > 2000) {
+		pitch_output = 2000;
 	}
 
 	return pitch_output;

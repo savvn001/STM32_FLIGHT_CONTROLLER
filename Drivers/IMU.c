@@ -7,8 +7,11 @@
 
 #include "IMU.h"
 #include "stm32f4xx_hal.h"
+#include "arm_math.h"
 
-#define TIMER_CLK_FREQ 100000000
+
+//Timer clock frequency, in this case same as MCU frequency, 100MHz
+#define TIMER_CLK_FREQ 100000000.0f
 
 I2C_HandleTypeDef hi2c2;
 
@@ -52,7 +55,7 @@ int delt_t = 0; // used to control display output rate
 int count = 0;  // used to control display output rate
 
 // parameters for 6 DoF sensor fusion calculations
-#define PI 3.14159265358979323846 //PI DEFINED IN arm_math.h
+//#define PI 3.14159265358979323846 //PI DEFINED IN arm_math.h
 float GyroMeasError = PI * (60.0f / 180.0f); // gyroscope measurement error in rads/s (start at 60 deg/s), then reduce after ~10 s to 3
 float beta = sqrt(3.0f / 4.0f) * PI * (60.0f / 180.0f);  // compute beta
 float GyroMeasDrift = PI * (1.0f / 180.0f); // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
@@ -62,7 +65,7 @@ float zeta = sqrt(3.0f / 4.0f) * PI * (1.0f / 180.0f); // compute zeta, the othe
 
 float pitch, yaw, roll;
 float deltat = 0.0f;             // integration interval for both filter schemes
-int lastUpdate = 0, firstUpdate = 0, Now = 0; // used to calculate integration interval                               // used to calculate integration interval
+float32_t lastUpdate = 0, firstUpdate = 0, Now = 0; // used to calculate integration interval                               // used to calculate integration interval
 float q[4] = { 1.0f, 0.0f, 0.0f, 0.0f };           // vector to hold quaternion
 float eInt[3] = { 0.0f, 0.0f, 0.0f }; // vector to hold integral error for Mahony method
 
@@ -155,7 +158,7 @@ void calc_RollPitchYaw(int counter_value) {
 	//******* Get roll pitch & yaw values from registers (also from library example but adapted slightly) ********
 
 	// If intPin goes high, all data registers have new data
-	if (readByte(MPU9250_ADDRESS_TX, MPU9250_ADDRESS_RX, INT_STATUS) & 0x01) { // On interrupt, check if	 data ready interrupt
+	if (readByte(MPU9250_ADDRESS_TX, MPU9250_ADDRESS_RX, INT_STATUS) & 0x01) { // On interrupt, check if data ready interrupt
 
 		readAccelData(accelCount);  // Read the x/y/z adc values
 		// Now we'll calculate the accleration value into actual g's
@@ -184,12 +187,38 @@ void calc_RollPitchYaw(int counter_value) {
 	if(Now - lastUpdate < 0){
 		//Take time difference taking into account reset of timer
 		//Formula for getting timer count into seconds = COUNT * (1/TIMER_CLK)*PRESCALER
-		deltat = (float) (((65535-lastUpdate)+Now) * (1 / (100000000.0f / 2000.0f)));
+		//deltat = (float) (((65535-lastUpdate)+Now) * (1 / (TIMER_CLK_FREQ / 2000.0f)));
+
+
+		//Calculating time difference using ARM DSP Library:
+
+		float32_t timer_load = 65535;
+		float32_t time_difference = 0;
+
+		//Get time difference
+		arm_sub_f32(&timer_load, &lastUpdate, &time_difference, 1);
+		//Add to now
+		float32_t time_diff_plus_now = 0;
+		arm_add_f32(&time_difference, &Now, &time_diff_plus_now, 1);
+
+		float32_t top;
+		float32_t prescaler = 2000;
+
+		arm_mult_f32(&prescaler, &time_diff_plus_now, &top, 1);
+
+		deltat = top/TIMER_CLK_FREQ;
 
 	}
 	else{
 	//Otherwise normally the count difference will be positive
-	deltat = (float) ((Now - lastUpdate) * (1 / (100000000.0f / 2000.0f))); // set integration time by time elapsed since last filter update
+	//deltat = (float) ((Now - lastUpdate) * (1 / (TIMER_CLK_FREQ / 2000.0f))); // set integration time by time elapsed since last filter update
+		float32_t result1 = 0;
+		arm_sub_f32(&Now, &lastUpdate, &result1, 1);
+		float32_t result2 = 0;
+		float32_t prescaler = 2000;
+		arm_mult_f32(&result1, &prescaler,&result2, 1);
+
+		deltat = result2/TIMER_CLK_FREQ;
 	}
 
 	lastUpdate = Now;
@@ -213,8 +242,7 @@ void calc_RollPitchYaw(int counter_value) {
 	// For more see http://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles which has additional links.
 	yaw = atan2(2.0 * (q[1] * q[2] + q[0] * q[3]), q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]);
 	pitch = -asin(2.0 * (q[1] * q[3] - q[0] * q[2]));
-	roll = atan2(2.0 * (q[0] * q[1] + q[2] * q[3]),
-			q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]);
+	roll = atan2(2.0 * (q[0] * q[1] + q[2] * q[3]), q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]);
 	pitch *= 180.0 / PI;
 	yaw *= 180.0 / PI;
 	yaw -=  -1.1; // CHANGE-> (In Leeds, UK declination = -1.1) ... Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04 (+13.8)

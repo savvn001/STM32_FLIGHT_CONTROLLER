@@ -29,7 +29,8 @@ Src/main.o: ../Src/main.c ../Inc/main.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Src/../Drivers/IMU.h ../Src/../Drivers/PID.h
+ ../Src/../Drivers/IMU.h ../Src/../Drivers/PID.h ../Inc/arm_math.h \
+ ../Drivers/CMSIS/Include/cmsis_compiler.h
 
 ../Inc/main.h:
 
@@ -96,3 +97,7 @@ Src/main.o: ../Src/main.c ../Inc/main.h \
 ../Src/../Drivers/IMU.h:
 
 ../Src/../Drivers/PID.h:
+
+../Inc/arm_math.h:
+
+../Drivers/CMSIS/Include/cmsis_compiler.h:

@@ -42,6 +42,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
+int trigger_tim4 = 0;
 
 /* USER CODE END PV */
 
@@ -205,14 +206,6 @@ void TIM3_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM3_IRQn 0 */
 
-
-	//flash led??
-	//HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5); //Toggle LED on if so
-
-
-	//printftest();
-	timer_reset();
-
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
   /* USER CODE BEGIN TIM3_IRQn 1 */
@@ -226,12 +219,17 @@ void TIM3_IRQHandler(void)
 void TIM4_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM4_IRQn 0 */
-	 //HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_0);
-
   /* USER CODE END TIM4_IRQn 0 */
   HAL_TIM_IRQHandler(&htim4);
   /* USER CODE BEGIN TIM4_IRQn 1 */
 
+  if(trigger_tim4 == 1){
+  pulse_complete_handler();
+  trigger_tim4 = 0;
+  }
+  else{
+	  trigger_tim4++;
+  }
   /* USER CODE END TIM4_IRQn 1 */
 }
 
