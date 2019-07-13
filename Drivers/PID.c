@@ -16,9 +16,9 @@
 //The receiver value is the desired orientation
 float receiver = 0;
 //PID gain values
-float roll_p_gain = 20;
-float roll_i_gain = 0;
-float roll_d_gain = 0;
+float roll_p_gain = 13.2;
+float roll_i_gain = 20.2;
+float roll_d_gain = 3.586;
 
 float roll_setpoint = 0;
 float roll_p_gain_max = 400; //Set a maximum value to prevent extreme outputs
@@ -72,9 +72,9 @@ float pid_calculate_roll(float IMU_roll_value, int timer_value) {
 //Pitch Axis PID control variables
 
 //PID gain values
-float pitch_p_gain = 15; //2.8
-float pitch_i_gain = 0.05;//0.002; //0.002
-float pitch_d_gain = 0; //0.1
+float pitch_p_gain = 0; //12 causes oscillation
+float pitch_i_gain = 0;
+float pitch_d_gain = 0;
 
 float pitch_setpoint = 0;
 float pitch_p_gain_max = 400; //Set a maximum value to prevent extreme outputs
@@ -90,6 +90,8 @@ int pitch_now = 0;
 int pitch_last_update = 0;
 float pitch_elapsed_time = 0;
 
+int pitch_pid_clip = 400;
+
 float pid_calculate_pitch(float IMU_pitch_value, int timer_value) {
 
 	//pitch calculations
@@ -101,18 +103,19 @@ float pid_calculate_pitch(float IMU_pitch_value, int timer_value) {
 	pitch_p = pitch_p_gain * pitch_error;
 
 	//Integral
+	if(-5 < pitch_error < 5){
 	pitch_i += (pitch_i_gain * pitch_error);
-
-	/*//Clip i component?
-		if (pitch_i < -800) {
-			pitch_i = -800;
-		} else if (pitch_i > 800) {
-			pitch_i = 800;
-		}*/
+	}
+	//Clip i component
+	if (pitch_i > pitch_pid_clip)
+		pitch_i = pitch_pid_clip;
+	else if (pitch_i < pitch_pid_clip * -1)
+		pitch_i = pitch_pid_clip * -1;
 
 	//Derivative component
 	pitch_now = timer_value;
 
+	//Calculate elapsed time from timer count values
 	if (pitch_now - pitch_last_update < 0) {
 		//Take time difference taking into account reset of timer
 		//Formula for getting timer count into seconds = COUNT * (1/TIMER_CLK)*PRESCALER
@@ -123,6 +126,7 @@ float pid_calculate_pitch(float IMU_pitch_value, int timer_value) {
 		pitch_elapsed_time = (float) ((pitch_now - pitch_last_update) * (1 / (100000000.0f / 2000.0f))); // set integration time by time elapsed since last filter update
 	}
 
+	//Now actually work out d component
 	pitch_d = pitch_d_gain
 			* ((pitch_error - pitch_last_d_error) / pitch_elapsed_time);
 	pitch_last_update = pitch_now;
@@ -132,11 +136,32 @@ float pid_calculate_pitch(float IMU_pitch_value, int timer_value) {
 	pitch_output = pitch_p + pitch_i + pitch_d;
 
 	//Clip PID output in event of extreme swings
-	if (pitch_output < -2000) {
-		pitch_output = -2000;
-	} else if (pitch_output > 2000) {
-		pitch_output = 2000;
+	if (pitch_output < -pitch_pid_clip) {
+		pitch_output = -pitch_pid_clip;
+	} else if (pitch_output > pitch_pid_clip) {
+		pitch_output = pitch_pid_clip;
 	}
 
 	return pitch_output;
+}
+
+
+
+void p_up(){
+	pitch_p_gain += 0.5;
+}
+void p_down(){
+	pitch_p_gain -= 0.5;
+}
+void i_up(){
+	pitch_i_gain += 0.2;
+}
+void i_down(){
+	pitch_i_gain -= 0.2;
+}
+void d_up(){
+	pitch_d_gain += 0.1;
+}
+void d_down(){
+	pitch_d_gain -= 0.1;
 }

@@ -35,13 +35,10 @@
 /* USER CODE BEGIN PTD */
 //Min and max counter load value for timer4, which handles PWM generation. ESC_MIN = 125us pulse
 //and ESC_MAX = 250us pulse (OneShot125 protocol)
-#define ESC_MIN 2540
-#define ESC_MAX 5080
+#define ESC_MIN 1250
+#define ESC_MAX 2500
 //How many of same pulse to send before updating with new value
 #define PULSE_DIV 4
-/*If doing PID tuning and want to store IMU readings in a buffer to print to
- * a PC later enable */
-#define PID_TUNE_DEBUG 0
 
 /* USER CODE END PTD */
 
@@ -86,6 +83,7 @@ float pid_output_pitch = 0;
 float pid_output_yaw = 0;
 
 int pulse_count = 0;
+int tim3_count = 0;
 
 bool main_loop = 0;
 
@@ -93,13 +91,18 @@ bool main_loop = 0;
  *  printing afterwards to evaluate system response, can comment out later to save RAM
  *  if needed (approx 20k needed?)
  */
+
+#define PID_TUNE_DEBUG 0
+
 #if PID_TUNE_DEBUG
 
 int samples_to_take = 5000;
-float PID_print_buffer [5000];
+float PID_print_buffer[5000];
 int print_buffer_index = 0;
 
 #endif
+
+#define MOTORS 0
 
 /*** Set up structures for PID control using DSP library ***/
 
@@ -134,6 +137,10 @@ void update_PID_values();
 long map(long x, long in_min, long in_max, long out_min, long out_max);
 int __io_putchar(int ch);
 int _write(int file, char *ptr, int len);
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
+
+void printToPC();
 
 /* USER CODE END PFP */
 
@@ -183,7 +190,6 @@ int main(void)
 	}
 
 	//Remove volatile after! Just for debugging
-	int count = 0;
 	volatile int timer1;
 	volatile int timer2;
 	volatile int difference;
@@ -199,27 +205,24 @@ int main(void)
 	HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_3);
 	HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_4);
 
+#if MOTORS
 	ARM_ESCs();
-
-	PWM1_Set(ESC_MIN + 500);
-	PWM2_Set(ESC_MIN + 500);
-	PWM3_Set(ESC_MIN + 500);
-	PWM4_Set(ESC_MIN + 500);
+#endif
+	PWM1_Set(ESC_MIN + 200);
+	PWM2_Set(ESC_MIN + 200);
+	PWM3_Set(ESC_MIN + 200);
+	PWM4_Set(ESC_MIN + 200);
 
 	/* Init DSP Library PID functions*/
 
-	pid_pitch_gains.Kp = 5;
-	pid_pitch_gains.Ki = 0.02;
+	pid_pitch_gains.Kp = 20;
+	pid_pitch_gains.Ki = 0;
 	pid_pitch_gains.Kd = 0;
-
 	arm_pid_init_f32(&pid_pitch_gains, 0);
 
 	/* Roll */
 
 	/* Yaw */
-
-
-
 
   /* USER CODE END 2 */
 
@@ -231,45 +234,8 @@ int main(void)
 
 		/** Main control loop **/
 
-
 		//After falling edge of ESC PWM signal, flag set from IRQ handler
 		if (getRPY_flag) {
-
-			//timer1 = htim3.Instance->CNT;
-
-			count = htim3.Instance->CNT; //read TIM3 counter value
-			calc_RollPitchYaw(count);
-
-			//Roll PID calculation
-			imu_roll = get_roll();
-			//count = htim3.Instance->CNT;
-			//pid_output_roll = pid_calculate_roll(imu_roll, count);
-
-			//Pitch PID calculation
-			imu_pitch = get_pitch();
-			//count = htim3.Instance->CNT;
-			pid_output_pitch = pid_calculate_pitch(imu_pitch, count);
-			//pid_output_pitch = arm_pid_f32(&pid_pitch_gains, imu_pitch);
-
-			#if PID_TUNE_DEBUG
-			/*** For tuning PID, store in buffer to print to PC later ***/
-			if(print_buffer_index < samples_to_take){
-			PID_print_buffer[print_buffer_index] = imu_pitch;
-			print_buffer_index++;
-			}
-			else{
-				//After n number of samples logged into buffer, print out to PC
-				print_buffer_index = 0;
-				print_data_to_pc();
-			}
-			#endif
-
-
-
-			//timer2 = htim3.Instance->CNT;
-			//difference = timer2 - timer1;
-
-			getRPY_flag = 0;
 
 		}
 
@@ -422,9 +388,9 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 4;
+  htim4.Init.Prescaler = 9;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 10000;
+  htim4.Init.Period = 20000;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
@@ -517,22 +483,11 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : PC0 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA5 */
   GPIO_InitStruct.Pin = GPIO_PIN_5;
@@ -596,64 +551,65 @@ void pulse_complete_handler() {
 	//Only want this to happen in main loop - not during init sequence
 	if (main_loop) {
 
-		switch (pulse_count) {
+		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
 
-		//Last pulse before returning to 0
-		case PULSE_DIV - 1:
+		tim3_count = htim3.Instance->CNT; //read TIM3 counter value
+		calc_RollPitchYaw(tim3_count);
 
-			//Calculate new pulse width values
-			esc1_total = ESC_MIN + esc1_throttle + pid_output_pitch;
-			esc2_total = ESC_MIN + esc2_throttle + pid_output_pitch;
-			esc3_total = ESC_MIN + esc3_throttle - pid_output_pitch;
-			esc4_total = ESC_MIN + esc4_throttle - pid_output_pitch;
+		//Pitch PID calculation
+		imu_pitch = get_pitch();
+		tim3_count = htim3.Instance->CNT;
+		pid_output_pitch = pid_calculate_pitch(imu_pitch, tim3_count);
+		//pid_output_pitch = arm_pid_f32(&pid_pitch_gains, imu_pitch);
 
-			//Clip PWM values to make sure they don't go outside of range
-			if (esc1_total < ESC_MIN) {
-				esc1_total = ESC_MIN;
-			}
-			if (esc1_total > ESC_MAX) {
-				esc1_total = ESC_MAX;
-			}
-			if (esc2_total < ESC_MIN) {
-				esc2_total = ESC_MIN;
-			}
-			if (esc2_total > ESC_MAX) {
-				esc2_total = ESC_MAX;
-			}
-			if (esc3_total < ESC_MIN) {
-				esc3_total = ESC_MIN;
-			}
-			if (esc3_total > ESC_MAX) {
-				esc3_total = ESC_MAX;
-			}
-			if (esc4_total < ESC_MIN) {
-				esc4_total = ESC_MIN;
-			}
-			if (esc4_total > ESC_MAX) {
-				esc4_total = ESC_MAX;
-			}
-
-			PWM1_Set(esc1_total); //PWM1 = Back left, CW
-			PWM2_Set(esc2_total); //PWM2 = Front left, CCW
-			PWM3_Set(esc3_total); //PWM3 = Back right, CCW
-			PWM4_Set(esc4_total); //PWM4 = Front right, CW
-
-			pulse_count = 0;
-
-			break;
-
-			//First pulse
-		case 0:
-			HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_0);
-			getRPY_flag = 1;
-			pulse_count++;
-			break;
-
-		default:
-			pulse_count++;
-
-			break;
+		/*** For tuning PID, store in buffer to print to PC later ***/
+#if PID_TUNE_DEBUG
+		if (print_buffer_index < samples_to_take) {
+			PID_print_buffer[print_buffer_index] = imu_pitch;
+			print_buffer_index++;
+		} else {
+			printToPC();
 		}
+#endif
+
+		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
+
+		//Calculate new pulse width values
+		esc1_total = ESC_MIN + esc1_throttle + pid_output_pitch;
+		esc2_total = ESC_MIN + esc2_throttle + pid_output_pitch;
+		esc3_total = ESC_MIN + esc3_throttle - pid_output_pitch;
+		esc4_total = ESC_MIN + esc4_throttle - pid_output_pitch;
+
+		//Clip PWM values to make sure they don't go outside of range
+		if (esc1_total < ESC_MIN) {
+			esc1_total = ESC_MIN;
+		}
+		if (esc1_total > ESC_MAX) {
+			esc1_total = ESC_MAX;
+		}
+		if (esc2_total < ESC_MIN) {
+			esc2_total = ESC_MIN;
+		}
+		if (esc2_total > ESC_MAX) {
+			esc2_total = ESC_MAX;
+		}
+		if (esc3_total < ESC_MIN) {
+			esc3_total = ESC_MIN;
+		}
+		if (esc3_total > ESC_MAX) {
+			esc3_total = ESC_MAX;
+		}
+		if (esc4_total < ESC_MIN) {
+			esc4_total = ESC_MIN;
+		}
+		if (esc4_total > ESC_MAX) {
+			esc4_total = ESC_MAX;
+		}
+
+		PWM1_Set(esc1_total); //PWM1 = Back left, CW
+		PWM2_Set(esc2_total); //PWM2 = Front left, CCW
+		PWM3_Set(esc3_total); //PWM3 = Back right, CCW
+		PWM4_Set(esc4_total); //PWM4 = Front right, CW
 
 	}
 
@@ -662,7 +618,6 @@ void pulse_complete_handler() {
 long map(long x, long in_min, long in_max, long out_min, long out_max) {
 	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
-
 
 /*
  *	Some functions to allow the program to use printf,
@@ -685,30 +640,45 @@ int _write(int file, char *ptr, int len) {
 	return len;
 }
 
-void print_data_to_pc(){
-
-	#if PID_TINE_DEBUG
-
+void printToPC() {
+#if PID_TUNE_DEBUG
+	//After n number of samples logged into buffer, print out to PC
+	/* Set a breakpoint here */
+	/** Print data to PC **/
 	for (int i = 0; i < samples_to_take; ++i) {
 
 		printf("%f\r\n", PID_print_buffer[i]);
 
 	}
 
-	update_PID_values();
-
-	#endif
-
+	print_buffer_index = 0;
+	/* Set another breakpoint here */
+#endif
 }
 
-void update_PID_values(){
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
-	pid_pitch_gains.Kp;
-	pid_pitch_gains.Ki;
-	pid_pitch_gains.Kd;
+	if (GPIO_Pin == A0_Pin) {
+		p_up();
+	}
+	if (GPIO_Pin == A1_Pin) {
+		p_down();
+	}
+	if (GPIO_Pin == A2_Pin) {
+		i_up();
+	}
+	if (GPIO_Pin == D13_Pin) {
+		i_down();
+	}
+
+	if (GPIO_Pin == P35_Pin) {
+		d_up();
+	}
+	if (GPIO_Pin == P27_Pin) {
+		d_down();
+	}
 
 }
-
 
 /* USER CODE END 4 */
 

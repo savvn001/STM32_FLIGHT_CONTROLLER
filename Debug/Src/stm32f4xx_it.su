@@ -7,5 +7,11 @@ stm32f4xx_it.c:145:6:SVC_Handler	0	static
 stm32f4xx_it.c:158:6:DebugMon_Handler	0	static
 stm32f4xx_it.c:171:6:PendSV_Handler	0	static
 stm32f4xx_it.c:184:6:SysTick_Handler	8	static
-stm32f4xx_it.c:205:6:TIM3_IRQHandler	8	static
-stm32f4xx_it.c:219:6:TIM4_IRQHandler	8	static
+stm32f4xx_it.c:205:6:EXTI0_IRQHandler	8	static
+stm32f4xx_it.c:219:6:EXTI1_IRQHandler	8	static
+stm32f4xx_it.c:233:6:EXTI2_IRQHandler	8	static
+stm32f4xx_it.c:247:6:EXTI4_IRQHandler	8	static
+stm32f4xx_it.c:261:6:EXTI9_5_IRQHandler	8	static
+stm32f4xx_it.c:275:6:TIM3_IRQHandler	8	static
+stm32f4xx_it.c:289:6:TIM4_IRQHandler	8	static
+stm32f4xx_it.c:303:6:EXTI15_10_IRQHandler	8	static

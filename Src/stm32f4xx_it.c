@@ -222,14 +222,8 @@ void TIM4_IRQHandler(void)
   /* USER CODE END TIM4_IRQn 0 */
   HAL_TIM_IRQHandler(&htim4);
   /* USER CODE BEGIN TIM4_IRQn 1 */
-
-  if(trigger_tim4 == 1){
   pulse_complete_handler();
-  trigger_tim4 = 0;
-  }
-  else{
-	  trigger_tim4++;
-  }
+
   /* USER CODE END TIM4_IRQn 1 */
 }
 
