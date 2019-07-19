@@ -1,8 +1,2 @@
 PID.c:35:7:pid_calculate_roll	0	static
-PID.c:95:7:pid_calculate_pitch	0	static
-PID.c:150:6:p_up	0	static
-PID.c:153:6:p_down	0	static
-PID.c:156:6:i_up	8	static
-PID.c:159:6:i_down	8	static
-PID.c:162:6:d_up	8	static
-PID.c:165:6:d_down	8	static
+PID.c:97:7:pid_calculate_pitch	32	static

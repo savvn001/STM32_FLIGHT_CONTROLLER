@@ -401,9 +401,9 @@ void readGyroData(int16_t * destination) {
 
 void readMagData(int16_t * destination) {
 	uint8_t rawData[7]; // x/y/z gyro register data, ST2 register stored here, must read ST2 at end of data acquisition
-	if (readByte(AK8963_ADDRESS_TX, AK8963_ADDRESS_RX, AK8963_ST1) & 0x01) { // wait for magnetometer data ready bit to be set
-		readBytes(AK8963_ADDRESS_TX, AK8963_ADDRESS_RX, AK8963_XOUT_L, 7,
-				&rawData[0]); // Read the six raw data and ST2 registers sequentially into data array
+	//if (readByte(AK8963_ADDRESS_TX, AK8963_ADDRESS_RX, AK8963_ST1) & 0x01) { // wait for magnetometer data ready bit to be set
+
+		readBytes(AK8963_ADDRESS_TX, AK8963_ADDRESS_RX, AK8963_XOUT_L, 7, &rawData[0]); // Read the six raw data and ST2 registers sequentially into data array
 		uint8_t c = rawData[6]; // End data read by reading ST2 register
 		if (!(c & 0x08)) { // Check if magnetic sensor overflow set, if not then report data
 			destination[0] =
@@ -413,7 +413,7 @@ void readMagData(int16_t * destination) {
 			destination[2] =
 					(int16_t) (((int16_t) rawData[5] << 8) | rawData[4]);
 		}
-	}
+	//}
 }
 
 int16_t readTempData() {
@@ -461,12 +461,12 @@ void initMPU9250() {
 
 	// Configure Gyro and Accelerometer
 	// Disable FSYNC and set accelerometer and gyro bandwidth to 44 and 42 Hz, respectively;
-	// DLPF_CFG = bits 2:0 = 010; this sets the sample rate at 1 kHz for both
+	// DLPF_CFG = bits 2:0 = 010 = 0x03; this sets the sample rate at 1 kHz for both
 	// Maximum delay is 4.9 ms which is just over a 200 Hz maximum rate
-	writeByte(MPU9250_ADDRESS_TX, CONFIG, 0x03);
+	writeByte(MPU9250_ADDRESS_TX, CONFIG, 0x00);
 
 	// Set sample rate = gyroscope output rate/(1 + SMPLRT_DIV)
-	writeByte(MPU9250_ADDRESS_TX, SMPLRT_DIV, 0x04); // Use a 200 Hz rate; the same rate set in CONFIG above
+	writeByte(MPU9250_ADDRESS_TX, SMPLRT_DIV, 0x00); // Use a 200 Hz rate; the same rate set in CONFIG above
 
 	// Set gyroscope full scale range
 	// Range selects FS_SEL and AFS_SEL are 0 - 3, so 2-bit values are left-shifted into positions 4:3

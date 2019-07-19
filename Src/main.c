@@ -55,17 +55,23 @@
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c2;
 
+SPI_HandleTypeDef hspi2;
+
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef huart2;
+UART_HandleTypeDef huart6;
+DMA_HandleTypeDef hdma_usart2_rx;
+DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
 
-int esc1_throttle = 200;
-int esc2_throttle = 200;
-int esc3_throttle = 200;
-int esc4_throttle = 200;
+int esc1_throttle = 300;
+int esc2_throttle = 300;
+int esc3_throttle = 300;
+int esc4_throttle = 300;
+
 
 int esc1_total = 0;
 int esc2_total = 0;
@@ -97,12 +103,14 @@ bool main_loop = 0;
 #if PID_TUNE_DEBUG
 
 int samples_to_take = 5000;
+
 float PID_print_buffer[5000];
+float IMU_print_buffer[5000];
 int print_buffer_index = 0;
 
 #endif
 
-#define MOTORS 0
+#define MOTORS 1
 
 /*** Set up structures for PID control using DSP library ***/
 
@@ -115,10 +123,13 @@ arm_pid_instance_f32 pid_yaw_gains;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
+static void MX_USART6_UART_Init(void);
+static void MX_SPI2_Init(void);
 /* USER CODE BEGIN PFP */
 
 void ARM_ESCs();
@@ -129,7 +140,7 @@ void PWM2_Set(uint16_t value);
 void PWM3_Set(uint16_t value);
 void PWM4_Set(uint16_t value);
 
-void pulse_complete_handler();
+void pulse_posedge_handler();
 
 void print_data_to_pc();
 void update_PID_values();
@@ -139,7 +150,7 @@ int __io_putchar(int ch);
 int _write(int file, char *ptr, int len);
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
-
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 void printToPC();
 
 /* USER CODE END PFP */
@@ -178,10 +189,13 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_I2C2_Init();
   MX_TIM3_Init();
   MX_TIM4_Init();
+  MX_USART6_UART_Init();
+  MX_SPI2_Init();
   /* USER CODE BEGIN 2 */
 
 	//Init MPU9250
@@ -208,6 +222,7 @@ int main(void)
 #if MOTORS
 	ARM_ESCs();
 #endif
+
 	PWM1_Set(ESC_MIN + 200);
 	PWM2_Set(ESC_MIN + 200);
 	PWM3_Set(ESC_MIN + 200);
@@ -215,14 +230,23 @@ int main(void)
 
 	/* Init DSP Library PID functions*/
 
-	pid_pitch_gains.Kp = 20;
-	pid_pitch_gains.Ki = 0;
+	pid_pitch_gains.Kp = 8;
+	pid_pitch_gains.Ki = 0.;
 	pid_pitch_gains.Kd = 0;
 	arm_pid_init_f32(&pid_pitch_gains, 0);
 
 	/* Roll */
 
+
 	/* Yaw */
+
+	//RCC->APB2ENR |= RCC_APB2ENR_DBGMCUEN;
+//	HAL_DBGMCU_DisableDBGStandbyMode();
+//	HAL_DBGMCU_DisableDBGStopMode();
+//	DBGMCU->APB1FZ |= DBGMCU_APB1_FZ_DBG_TIM3_STOP; //enable timer 3 stop
+//	DBGMCU->APB1FZ |= DBGMCU_APB1_FZ_DBG_TIM4_STOP; //enable timer 4 stop
+
+
 
   /* USER CODE END 2 */
 
@@ -230,14 +254,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 	while (1) {
 
+
 		main_loop = 1;
-
-		/** Main control loop **/
-
-		//After falling edge of ESC PWM signal, flag set from IRQ handler
-		if (getRPY_flag) {
-
-		}
 
     /* USER CODE END WHILE */
 
@@ -324,6 +342,44 @@ static void MX_I2C2_Init(void)
 }
 
 /**
+  * @brief SPI2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI2_Init(void)
+{
+
+  /* USER CODE BEGIN SPI2_Init 0 */
+
+  /* USER CODE END SPI2_Init 0 */
+
+  /* USER CODE BEGIN SPI2_Init 1 */
+
+  /* USER CODE END SPI2_Init 1 */
+  /* SPI2 parameter configuration*/
+  hspi2.Instance = SPI2;
+  hspi2.Init.Mode = SPI_MODE_MASTER;
+  hspi2.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi2.Init.NSS = SPI_NSS_SOFT;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
+  hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi2.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI2_Init 2 */
+
+  /* USER CODE END SPI2_Init 2 */
+
+}
+
+/**
   * @brief TIM3 Initialization Function
   * @param None
   * @retval None
@@ -380,7 +436,6 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 0 */
 
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
   TIM_OC_InitTypeDef sConfigOC = {0};
 
@@ -393,15 +448,6 @@ static void MX_TIM4_Init(void)
   htim4.Init.Period = 20000;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
   if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
   {
     Error_Handler();
@@ -473,6 +519,57 @@ static void MX_USART2_UART_Init(void)
 }
 
 /**
+  * @brief USART6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART6_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART6_Init 0 */
+
+  /* USER CODE END USART6_Init 0 */
+
+  /* USER CODE BEGIN USART6_Init 1 */
+
+  /* USER CODE END USART6_Init 1 */
+  huart6.Instance = USART6;
+  huart6.Init.BaudRate = 115200;
+  huart6.Init.WordLength = UART_WORDLENGTH_8B;
+  huart6.Init.StopBits = UART_STOPBITS_1;
+  huart6.Init.Parity = UART_PARITY_NONE;
+  huart6.Init.Mode = UART_MODE_TX_RX;
+  huart6.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart6.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART6_Init 2 */
+
+  /* USER CODE END USART6_Init 2 */
+
+}
+
+/** 
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void) 
+{
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Stream5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
+  /* DMA1_Stream6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -483,11 +580,25 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOH_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, CE_Pin|CSN_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : PC3 */
+  GPIO_InitStruct.Pin = GPIO_PIN_3;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA5 */
   GPIO_InitStruct.Pin = GPIO_PIN_5;
@@ -495,6 +606,23 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : CE_Pin CSN_Pin */
+  GPIO_InitStruct.Pin = CE_Pin|CSN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PWM_RE_INT_Pin */
+  GPIO_InitStruct.Pin = PWM_RE_INT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(PWM_RE_INT_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
 }
 
@@ -506,7 +634,7 @@ void ARM_ESCs() {
 
 	HAL_Delay(100);
 
-	int delay_time = 8000;
+	int delay_time = 7000;
 
 	PWM1_Set(ESC_MAX); //Send max value (250us pulse)
 	PWM2_Set(ESC_MAX); //Send max value (250us pulse)
@@ -545,13 +673,11 @@ void PWM4_Set(uint16_t value) {
 	htim4.Instance->CCR4 = value;
 }
 
-//This is called when each PWM pulse finishes, ie the falling edge of each pulse
-void pulse_complete_handler() {
+//
+void pulse_posedge_handler() {
 
 	//Only want this to happen in main loop - not during init sequence
 	if (main_loop) {
-
-		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
 
 		tim3_count = htim3.Instance->CNT; //read TIM3 counter value
 		calc_RollPitchYaw(tim3_count);
@@ -565,20 +691,20 @@ void pulse_complete_handler() {
 		/*** For tuning PID, store in buffer to print to PC later ***/
 #if PID_TUNE_DEBUG
 		if (print_buffer_index < samples_to_take) {
-			PID_print_buffer[print_buffer_index] = imu_pitch;
+			PID_print_buffer[print_buffer_index] = pid_output_pitch;
+			IMU_print_buffer[print_buffer_index] = imu_pitch;
+
 			print_buffer_index++;
 		} else {
 			printToPC();
 		}
 #endif
 
-		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
-
 		//Calculate new pulse width values
-		esc1_total = ESC_MIN + esc1_throttle + pid_output_pitch;
-		esc2_total = ESC_MIN + esc2_throttle + pid_output_pitch;
-		esc3_total = ESC_MIN + esc3_throttle - pid_output_pitch;
-		esc4_total = ESC_MIN + esc4_throttle - pid_output_pitch;
+		esc1_total = ESC_MIN + esc1_throttle + (int) pid_output_pitch;
+		esc2_total = ESC_MIN + esc2_throttle + (int) pid_output_pitch;
+		esc3_total = (ESC_MIN + esc3_throttle) - (int) pid_output_pitch;
+		esc4_total = (ESC_MIN + esc4_throttle) - (int) pid_output_pitch;
 
 		//Clip PWM values to make sure they don't go outside of range
 		if (esc1_total < ESC_MIN) {
@@ -621,7 +747,7 @@ long map(long x, long in_min, long in_max, long out_min, long out_max) {
 
 /*
  *	Some functions to allow the program to use printf,
- *	adapted from http://www.emcu.eu/how-to-implement-printf-for-send-message-via-usb-on-stm32-nucleo-boards-using-atollic/
+ *	from http://www.emcu.eu/how-to-implement-printf-for-send-message-via-usb-on-stm32-nucleo-boards-using-atollic/
  *
  */
 int __io_putchar(int ch) {
@@ -647,35 +773,24 @@ void printToPC() {
 	/** Print data to PC **/
 	for (int i = 0; i < samples_to_take; ++i) {
 
-		printf("%f\r\n", PID_print_buffer[i]);
+		printf("%f,%f\r\n", PID_print_buffer[i],IMU_print_buffer[i]);
 
 	}
 
+
 	print_buffer_index = 0;
 	/* Set another breakpoint here */
+
+	arm_pid_init_f32(&pid_pitch_gains, 1);
+
 #endif
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
-	if (GPIO_Pin == A0_Pin) {
-		p_up();
-	}
-	if (GPIO_Pin == A1_Pin) {
-		p_down();
-	}
-	if (GPIO_Pin == A2_Pin) {
-		i_up();
-	}
-	if (GPIO_Pin == D13_Pin) {
-		i_down();
-	}
-
-	if (GPIO_Pin == P35_Pin) {
-		d_up();
-	}
-	if (GPIO_Pin == P27_Pin) {
-		d_down();
+	if (GPIO_Pin == PWM_RE_INT_Pin && main_loop) {
+		pulse_posedge_handler();
+		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
 	}
 
 }

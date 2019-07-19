@@ -8,7 +8,7 @@
 #include "PID.h"
 
 #define TIMER_CLK_FREQ 100000000.0f
-
+#define delta_t 0.001978239367 //ESCs update at 505.5hz, time period of this
 
 
 //Roll Axis PID control variables
@@ -69,14 +69,15 @@ float pid_calculate_roll(float IMU_roll_value, int timer_value) {
 
 }
 
-//Pitch Axis PID control variables
+/********************** Pitch Axis PID control variables *****************************/
 
 //PID gain values
-float pitch_p_gain = 0; //12 causes oscillation
-float pitch_i_gain = 0;
-float pitch_d_gain = 0;
+float pitch_p_gain = 8.5; //12 causes oscillation
+float pitch_i_gain = 0.5;
+float pitch_d_gain = 0.8;
 
 float pitch_setpoint = 0;
+float pitch_output_temp = 0;
 float pitch_p_gain_max = 400; //Set a maximum value to prevent extreme outputs
 float pitch_error = 0;
 float pitch_i_mem = 0;
@@ -90,11 +91,10 @@ int pitch_now = 0;
 int pitch_last_update = 0;
 float pitch_elapsed_time = 0;
 
-int pitch_pid_clip = 400;
+int pitch_pid_clip = 1250;
 
+/** Pitch PID Calculation **/
 float pid_calculate_pitch(float IMU_pitch_value, int timer_value) {
-
-	//pitch calculations
 
 	//Calculate error
 	pitch_error = IMU_pitch_value - pitch_setpoint;
@@ -103,33 +103,16 @@ float pid_calculate_pitch(float IMU_pitch_value, int timer_value) {
 	pitch_p = pitch_p_gain * pitch_error;
 
 	//Integral
-	if(-5 < pitch_error < 5){
-	pitch_i += (pitch_i_gain * pitch_error);
-	}
-	//Clip i component
-	if (pitch_i > pitch_pid_clip)
-		pitch_i = pitch_pid_clip;
-	else if (pitch_i < pitch_pid_clip * -1)
-		pitch_i = pitch_pid_clip * -1;
+
+	//Only want it to act close to centre
+	//if(pitch_error < 10 && pitch_error > -10){
+	pitch_i += (pitch_i_gain * pitch_error * delta_t);
+	//}
 
 	//Derivative component
-	pitch_now = timer_value;
-
-	//Calculate elapsed time from timer count values
-	if (pitch_now - pitch_last_update < 0) {
-		//Take time difference taking into account reset of timer
-		//Formula for getting timer count into seconds = COUNT * (1/TIMER_CLK)*PRESCALER
-		pitch_elapsed_time = (float) (((65535 - pitch_last_update) + pitch_now)* (1 / (100000000.0f / 2000.0f)));
-
-	} else {
-		//Otherwise normally the count difference will be positive
-		pitch_elapsed_time = (float) ((pitch_now - pitch_last_update) * (1 / (100000000.0f / 2000.0f))); // set integration time by time elapsed since last filter update
-	}
 
 	//Now actually work out d component
-	pitch_d = pitch_d_gain
-			* ((pitch_error - pitch_last_d_error) / pitch_elapsed_time);
-	pitch_last_update = pitch_now;
+	pitch_d = pitch_d_gain * ( (pitch_error - pitch_last_d_error) / delta_t);
 	pitch_last_d_error = pitch_error;
 
 	//PID together
@@ -146,22 +129,3 @@ float pid_calculate_pitch(float IMU_pitch_value, int timer_value) {
 }
 
 
-
-void p_up(){
-	pitch_p_gain += 0.5;
-}
-void p_down(){
-	pitch_p_gain -= 0.5;
-}
-void i_up(){
-	pitch_i_gain += 0.2;
-}
-void i_down(){
-	pitch_i_gain -= 0.2;
-}
-void d_up(){
-	pitch_d_gain += 0.1;
-}
-void d_down(){
-	pitch_d_gain -= 0.1;
-}
