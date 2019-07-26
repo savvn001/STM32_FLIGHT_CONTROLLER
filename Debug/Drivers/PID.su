@@ -1,2 +1,2 @@
-PID.c:35:7:pid_calculate_roll	0	static
-PID.c:97:7:pid_calculate_pitch	32	static
+PID.c:40:7:pid_calculate_pitch	32	static
+PID.c:70:6:reset_pid_pitch	0	static

@@ -1,0 +1,2 @@
+dwt_delay.c:31:6:DWT_Init	0	static
+dwt_delay.c:70:6:DWT_Delay	0	static

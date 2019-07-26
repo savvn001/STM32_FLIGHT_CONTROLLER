@@ -5,20 +5,30 @@
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
 ../Drivers/IMU.c \
-../Drivers/PID.c 
+../Drivers/MY_NRF24.c \
+../Drivers/PID.c \
+../Drivers/dwt_delay.c 
 
 OBJS += \
 ./Drivers/IMU.o \
-./Drivers/PID.o 
+./Drivers/MY_NRF24.o \
+./Drivers/PID.o \
+./Drivers/dwt_delay.o 
 
 C_DEPS += \
 ./Drivers/IMU.d \
-./Drivers/PID.d 
+./Drivers/MY_NRF24.d \
+./Drivers/PID.d \
+./Drivers/dwt_delay.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
 Drivers/IMU.o: ../Drivers/IMU.c
-	arm-none-eabi-gcc "$<" -mcpu=cortex-m4 -std=gnu11 -g3 -DUSE_HAL_DRIVER -DSTM32F411xE -DDEBUG -c -I../Inc -I/Users/nick_savva/Downloads/CMSIS_5-develop/CMSIS/DSP/Include -I"/Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/dsp_library" -I../Drivers/CMSIS/Include -I../Drivers/STM32F4xx_HAL_Driver/Inc -I../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Drivers/IMU.d" -MT"$@" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "$@"
+	arm-none-eabi-gcc "$<" -mcpu=cortex-m4 -std=gnu11 -g3 -DEMPL_TARGET_STM32F4 '-DMPL_LOG_NDEBUG=1' -DMPU9250 -DEMPL -DUSE_DMP -DUSE_HAL_DRIVER -DSTM32F411xE -DDEBUG -c -I../Inc -I/Users/nick_savva/Downloads/CMSIS_5-develop/CMSIS/DSP/Include -I"/Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/dsp_library" -I../Drivers/CMSIS/Include -I../Drivers/STM32F4xx_HAL_Driver/Inc -I../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Drivers/IMU.d" -MT"$@" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "$@"
+Drivers/MY_NRF24.o: ../Drivers/MY_NRF24.c
+	arm-none-eabi-gcc "$<" -mcpu=cortex-m4 -std=gnu11 -g3 -DEMPL_TARGET_STM32F4 '-DMPL_LOG_NDEBUG=1' -DMPU9250 -DEMPL -DUSE_DMP -DUSE_HAL_DRIVER -DSTM32F411xE -DDEBUG -c -I../Inc -I/Users/nick_savva/Downloads/CMSIS_5-develop/CMSIS/DSP/Include -I"/Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/dsp_library" -I../Drivers/CMSIS/Include -I../Drivers/STM32F4xx_HAL_Driver/Inc -I../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Drivers/MY_NRF24.d" -MT"$@" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "$@"
 Drivers/PID.o: ../Drivers/PID.c
-	arm-none-eabi-gcc "$<" -mcpu=cortex-m4 -std=gnu11 -g3 -DUSE_HAL_DRIVER -DSTM32F411xE -DDEBUG -c -I../Inc -I/Users/nick_savva/Downloads/CMSIS_5-develop/CMSIS/DSP/Include -I"/Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/dsp_library" -I../Drivers/CMSIS/Include -I../Drivers/STM32F4xx_HAL_Driver/Inc -I../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Drivers/PID.d" -MT"$@" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "$@"
+	arm-none-eabi-gcc "$<" -mcpu=cortex-m4 -std=gnu11 -g3 -DEMPL_TARGET_STM32F4 '-DMPL_LOG_NDEBUG=1' -DMPU9250 -DEMPL -DUSE_DMP -DUSE_HAL_DRIVER -DSTM32F411xE -DDEBUG -c -I../Inc -I/Users/nick_savva/Downloads/CMSIS_5-develop/CMSIS/DSP/Include -I"/Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/dsp_library" -I../Drivers/CMSIS/Include -I../Drivers/STM32F4xx_HAL_Driver/Inc -I../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Drivers/PID.d" -MT"$@" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "$@"
+Drivers/dwt_delay.o: ../Drivers/dwt_delay.c
+	arm-none-eabi-gcc "$<" -mcpu=cortex-m4 -std=gnu11 -g3 -DEMPL_TARGET_STM32F4 '-DMPL_LOG_NDEBUG=1' -DMPU9250 -DEMPL -DUSE_DMP -DUSE_HAL_DRIVER -DSTM32F411xE -DDEBUG -c -I../Inc -I/Users/nick_savva/Downloads/CMSIS_5-develop/CMSIS/DSP/Include -I"/Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/dsp_library" -I../Drivers/CMSIS/Include -I../Drivers/STM32F4xx_HAL_Driver/Inc -I../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Drivers/dwt_delay.d" -MT"$@" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "$@"
 

@@ -11,7 +11,7 @@
 
 float pid_calculate_roll(float IMU_roll_value, int timer_value);
 float pid_calculate_pitch(float IMU_pitch_value, int timer_value);
-
+void reset_pid_pitch();
 
 
 void p_up();
