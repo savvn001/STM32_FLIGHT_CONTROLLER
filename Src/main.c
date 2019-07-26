@@ -97,7 +97,9 @@ int tim3_count = 0;
 bool main_loop = 0;
 
 uint64_t TxpipeAddrs = 0x11223344AA;
-char RxData[64];
+char RxData[32];
+int16_t RxJoystickX;
+int16_t RxJoystickY;
 
 /** For debugging and tuning PID control, data storage buffer for
  *  printing afterwards to evaluate system response, can comment out later to save RAM
@@ -158,6 +160,8 @@ int _write(int file, char *ptr, int len);
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 void printToPC();
+
+void unpackRxData();
 
 /* USER CODE END PFP */
 
@@ -247,7 +251,10 @@ int main(void) {
 		if (NRF24_available()) {
 
 			NRF24_read(RxData, 32);
-			printf("Received data %s\n\r", RxData);
+			unpackRxData();
+			printf("Joystick X =  %u\n\r", RxJoystickX);
+			printf("Joystick Y =  %u\n\r", RxJoystickY);
+
 
 		}
 
@@ -822,6 +829,18 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 		pulse_posedge_handler();
 		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
 	}
+
+}
+
+void unpackRxData(){
+
+	//RxData[0] = first byte of A0_value, RxData[1] = last byte of A0_value
+	RxJoystickX = (RxData[0] & 0xFF) | (RxData[1]<< 8);
+	//RxData[2] = first byte of A1_value, RxData[3] = last byte of A1_value
+	RxJoystickY = (RxData[2] & 0xFF) | (RxData[3]<< 8);
+
+
+
 
 }
 
