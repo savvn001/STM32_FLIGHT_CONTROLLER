@@ -6,6 +6,9 @@
  ******************************************************************************
  * @attention
  *
+ * STM32F411RE Flight Controller Main file.
+ * Nicholas Savva, 2019.
+ *
  * <h2><center>&copy; Copyright (c) 2019 STMicroelectronics.
  * All rights reserved.</center></h2>
  *
@@ -35,6 +38,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+
 //Min and max counter load value for timer4, which handles PWM generation. ESC_MIN = 125us pulse
 //and ESC_MAX = 250us pulse (OneShot125 protocol)
 #define ESC_MIN 1250
@@ -71,10 +75,7 @@ DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
 
-int esc1_throttle = 200;
-int esc2_throttle = 200;
-int esc3_throttle = 200;
-int esc4_throttle = 200;
+int throttle = 0;
 
 int esc1_total = 0;
 int esc2_total = 0;
@@ -83,23 +84,31 @@ int esc4_total = 0;
 
 bool getRPY_flag = 0;
 
+/* IMU reading variables */
 float imu_roll;
 float imu_pitch;
 float imu_yaw;
-
+/* PID */
+float roll_setpoint = 0;
+float pitch_setpoint = 0;
+float yaw_setpoint = 0;
 float pid_output_roll = 0;
 float pid_output_pitch = 0;
 float pid_output_yaw = 0;
 
-int pulse_count = 0;
 int tim3_count = 0;
-
 bool main_loop = 0;
 
+/* NRF24 Module */
 uint64_t TxpipeAddrs = 0x11223344AA;
 char RxData[32];
-int16_t RxJoystickX;
-int16_t RxJoystickY;
+char AckPayload[32] = "Ack by Drone!";
+
+//These hold the received joystick positions from the transmitter, left and right respectively
+int16_t L_Joystick_XPos;
+int16_t L_Joystick_YPos;
+int16_t R_Joystick_XPos;
+int16_t R_Joystick_YPos;
 
 /** For debugging and tuning PID control, data storage buffer for
  *  printing afterwards to evaluate system response, can comment out later to save RAM
@@ -118,12 +127,6 @@ int print_buffer_index = 0;
 #endif
 
 #define MOTORS 0
-
-/*** Set up structures for PID control using DSP library ***/
-
-arm_pid_instance_f32 pid_pitch_gains;
-arm_pid_instance_f32 pid_roll_gains;
-arm_pid_instance_f32 pid_yaw_gains;
 
 /* USER CODE END PV */
 
@@ -153,7 +156,7 @@ void pulse_posedge_handler();
 void print_data_to_pc();
 void update_PID_values();
 
-long map(long x, long in_min, long in_max, long out_min, long out_max);
+int map(int x, int in_min, int in_max, int out_min, int out_max);
 int __io_putchar(int ch);
 int _write(int file, char *ptr, int len);
 
@@ -214,27 +217,31 @@ int main(void) {
 
 	/**** Init NRF24L01 Module ***/
 
-
 	DWT_Init(); //Enable some of the MCUs special registers so we can get microsecond (us) delays
 	NRF24_begin(GPIOB, nrf_CSN_PIN, nrf_CE_PIN, hspi2);
 	nrf24_DebugUART_Init(huart2);
-	NRF24_setAutoAck(false);
-	NRF24_openReadingPipe(1,TxpipeAddrs);
+	NRF24_setAutoAck(true);
+	NRF24_enableAckPayload();
+	NRF24_openReadingPipe(1, TxpipeAddrs);
 	NRF24_startListening();
-
 
 	printRadioSettings();
 
 	/** Init timers ***/
 
-	/*//Start timer 3 in interrupt mode, used for integral calculations
+	//Start timer 3 in interrupt mode, used for integral calculations
 	HAL_TIM_Base_Start_IT(&htim3);
 
 	//Start up PWMs
 	HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_1);
 	HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_2);
 	HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_3);
-	HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_4);*/
+	HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_4);
+
+	htim4.Instance->CCR1 = 2500;
+	htim4.Instance->CCR2 = 2500;
+	htim4.Instance->CCR3 = 2500;
+	htim4.Instance->CCR4 = 2500;
 
 #if MOTORS
 	ARM_ESCs();
@@ -247,16 +254,6 @@ int main(void) {
 	while (1) {
 
 		main_loop = 1;
-
-		if (NRF24_available()) {
-
-			NRF24_read(RxData, 32);
-			unpackRxData();
-			printf("Joystick X =  %u\n\r", RxJoystickX);
-			printf("Joystick Y =  %u\n\r", RxJoystickY);
-
-
-		}
 
 		/* USER CODE END WHILE */
 
@@ -280,12 +277,11 @@ void SystemClock_Config(void) {
 	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 	/** Initializes the CPU, AHB and APB busses clocks
 	 */
-	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-	RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-	RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+	RCC_OscInitStruct.HSEState = RCC_HSE_ON;
 	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-	RCC_OscInitStruct.PLL.PLLM = 8;
+	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+	RCC_OscInitStruct.PLL.PLLM = 4;
 	RCC_OscInitStruct.PLL.PLLN = 100;
 	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
 	RCC_OscInitStruct.PLL.PLLQ = 4;
@@ -709,20 +705,66 @@ void PWM4_Set(uint16_t value) {
 	htim4.Instance->CCR4 = value;
 }
 
-//
+/* Calculate the required pulse widths to set individual motor speeds based off of IMU
+ * readings and instructions from controller.
+ *
+ * For the QAV210 kit the orientation is as so:
+ *
+ * (2 CCW)    (4 CW)
+ *		\	  /
+ *		   |
+ *		   |
+ *		   |
+ *		/     \
+ * (1 CW)     (3 CCW)
+ *
+ * This function gets called by the GPIO_EXTI callback when the PWM_RE_INT_Pin triggers an interrupt,
+ * on the rising edge of every PWM signal
+ */
 void pulse_posedge_handler() {
 
 	//Only want this to happen in main loop - not during init sequence
 	if (main_loop) {
 
-		tim3_count = htim3.Instance->CNT; //read TIM3 counter value
+		/* Get data from receiver */
+		if (NRF24_available()) {
+			NRF24_read(RxData, 32);
+			NRF24_writeAckPayload(1, AckPayload, 32);
+
+		}
+
+		//Unpack the 32 byte payload
+		unpackRxData();
+
+		//Map throttle joystick reading (12 bit ADC range 0-4095) to ESC range
+		throttle = map(L_Joystick_YPos, 900, 3000, ESC_MIN, ESC_MAX);
+
+		//Map right joystick X axis to roll set point
+		roll_setpoint = map(R_Joystick_XPos, 0, 4095, -33, 33);
+
+		//Map right joystick Y axis to roll set point
+		pitch_setpoint = map(R_Joystick_YPos, 0, 4095, -33, 33);
+
+		//Calculate roll, pitch & yaw using IMU readings
+		tim3_count = htim3.Instance->CNT; //read TIM3 counter value, used for integral calculations
 		calc_RollPitchYaw(tim3_count);
 
 		//Pitch PID calculation
 		imu_pitch = get_pitch();
 		tim3_count = htim3.Instance->CNT;
-		pid_output_pitch = pid_calculate_pitch(imu_pitch, tim3_count);
-		//pid_output_pitch = arm_pid_f32(&pid_pitch_gains, imu_pitch);
+		pid_output_pitch = pid_calculate_pitch(imu_pitch, tim3_count,
+				pitch_setpoint);
+
+		//Roll PID calculation
+		imu_roll = get_roll();
+		tim3_count = htim3.Instance->CNT;
+		pid_output_roll = pid_calculate_roll(imu_pitch, tim3_count,
+				roll_setpoint);
+
+		//Yaw PID calculation
+		imu_yaw = get_yaw();
+		tim3_count = htim3.Instance->CNT;
+		pid_output_yaw = pid_calculate_yaw(imu_yaw, tim3_count, yaw_setpoint);
 
 		/*** For tuning PID, store in buffer to print to PC later ***/
 #if PID_TUNE_DEBUG
@@ -737,10 +779,10 @@ void pulse_posedge_handler() {
 #endif
 
 		//Calculate new pulse width values
-		esc1_total = ESC_MIN + esc1_throttle + (int) pid_output_pitch;
-		esc2_total = ESC_MIN + esc2_throttle + (int) pid_output_pitch;
-		esc3_total = (ESC_MIN + esc3_throttle) - (int) pid_output_pitch;
-		esc4_total = (ESC_MIN + esc4_throttle) - (int) pid_output_pitch;
+		esc1_total = ESC_MIN + throttle + (int) pid_output_roll;
+		esc2_total = ESC_MIN + throttle + (int) pid_output_roll;
+		esc3_total = (ESC_MIN + throttle) - (int) pid_output_roll;
+		esc4_total = (ESC_MIN + throttle) - (int) pid_output_roll;
 
 		//Clip PWM values to make sure they don't go outside of range
 		if (esc1_total < ESC_MIN) {
@@ -768,6 +810,7 @@ void pulse_posedge_handler() {
 			esc4_total = ESC_MAX;
 		}
 
+		//Load new pulse widths into ESCs
 		PWM1_Set(esc1_total); //PWM1 = Back left, CW
 		PWM2_Set(esc2_total); //PWM2 = Front left, CCW
 		PWM3_Set(esc3_total); //PWM3 = Back right, CCW
@@ -777,7 +820,7 @@ void pulse_posedge_handler() {
 
 }
 
-long map(long x, long in_min, long in_max, long out_min, long out_max) {
+int map(int x, int in_min, int in_max, int out_min, int out_max) {
 	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
@@ -826,21 +869,20 @@ void printToPC() {
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
 	if (GPIO_Pin == PWM_RE_INT_Pin && main_loop) {
+		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
 		pulse_posedge_handler();
 		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
 	}
 
 }
 
-void unpackRxData(){
+void unpackRxData() {
 
-	//RxData[0] = first byte of A0_value, RxData[1] = last byte of A0_value
-	RxJoystickX = (RxData[0] & 0xFF) | (RxData[1]<< 8);
-	//RxData[2] = first byte of A1_value, RxData[3] = last byte of A1_value
-	RxJoystickY = (RxData[2] & 0xFF) | (RxData[3]<< 8);
-
-
-
+	/** Unpack received 32 byte payload from transmitter, see documentation for specification details **/
+	L_Joystick_XPos = (RxData[0] & 0xFF) | (RxData[1] << 8);
+	L_Joystick_YPos = (RxData[2] & 0xFF) | (RxData[3] << 8);
+	R_Joystick_XPos = (RxData[4] & 0xFF) | (RxData[5] << 8);
+	R_Joystick_YPos = (RxData[6] & 0xFF) | (RxData[7] << 8);
 
 }
 
