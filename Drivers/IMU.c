@@ -304,8 +304,8 @@ char readByte(uint8_t address_tx, uint8_t address_rx, uint8_t subAddress) {
 	//i2c.read(address, data, 1, 0);
 
 
-	HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 1, 10); //Send adress of register ONLY
-	HAL_I2C_Master_Receive(&hi2c2, address_tx, data, 1, 10);
+	HAL_I2C_Master_Transmit_IT(&hi2c2, address_tx, data_write, 1); //Send adress of register ONLY
+	HAL_I2C_Master_Receive_IT(&hi2c2, address_tx, data, 1);
 
 	return data[0];
 }
@@ -319,8 +319,8 @@ void readBytes(uint8_t address_tx, uint8_t address_rx, uint8_t subAddress,
 	//i2c.read(address, data, count, 0);
 
 
-	HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 1, 10);
-	HAL_I2C_Master_Receive(&hi2c2, address_rx, data, count, 10);
+	HAL_I2C_Master_Transmit_IT(&hi2c2, address_tx, data_write, 1);
+	HAL_I2C_Master_Transmit_IT(&hi2c2, address_rx, data, count);
 
 	for (int ii = 0; ii < count; ii++) {
 		dest[ii] = data[ii];

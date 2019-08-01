@@ -1,3 +1,4 @@
+"Drivers/GPS.o"
 "Drivers/IMU.o"
 "Drivers/MY_NRF24.o"
 "Drivers/PID.o"
