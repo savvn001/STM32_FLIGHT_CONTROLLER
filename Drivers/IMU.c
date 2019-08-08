@@ -45,7 +45,7 @@ int16_t accelCount[3];  // Stores the 16-bit signed accelerometer sensor output
 int16_t gyroCount[3];   // Stores the 16-bit signed gyro sensor output
 int16_t magCount[3];    // Stores the 16-bit signed magnetometer sensor output
 float magCalibration[3] = { 0, 0, 0 }, magbias[3] = { 0, 0, 0 }; // Factory mag calibration and mag bias
-float gyroBias[3] = { 1.030534, 1.648855, 0.137405 }, accelBias[3] = { -0.022766, 0.014160, 0.063354 }; // Bias corrections for gyro and accelerometer
+float gyroBias[3] = { 0, 0, 0. }, accelBias[3] = { 0, 0., 0.}; // Bias corrections for gyro and accelerometer
 float ax, ay, az, gx, gy, gz, mx, my, mz; // variables to hold latest sensor data values
 int16_t tempCount; // Stores the real internal chip temperature in degrees Celsius
 float temperature;
@@ -202,7 +202,7 @@ void calc_RollPitchYaw(int counter_value) {
 		arm_add_f32(&time_difference, &Now, &time_diff_plus_now, 1);
 
 		float32_t top;
-		float32_t prescaler = 2000;
+		float32_t prescaler = 999;
 
 		arm_mult_f32(&prescaler, &time_diff_plus_now, &top, 1);
 
@@ -215,7 +215,7 @@ void calc_RollPitchYaw(int counter_value) {
 		float32_t result1 = 0;
 		arm_sub_f32(&Now, &lastUpdate, &result1, 1);
 		float32_t result2 = 0;
-		float32_t prescaler = 2000;
+		float32_t prescaler = 999;
 		arm_mult_f32(&result1, &prescaler,&result2, 1);
 
 		deltat = result2/TIMER_CLK_FREQ;
@@ -304,8 +304,8 @@ char readByte(uint8_t address_tx, uint8_t address_rx, uint8_t subAddress) {
 	//i2c.read(address, data, 1, 0);
 
 
-	HAL_I2C_Master_Transmit_IT(&hi2c2, address_tx, data_write, 1); //Send adress of register ONLY
-	HAL_I2C_Master_Receive_IT(&hi2c2, address_tx, data, 1);
+	HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 1, 10); //Send adress of register ONLY
+	HAL_I2C_Master_Receive(&hi2c2, address_tx, data, 1, 10);
 
 	return data[0];
 }
@@ -319,8 +319,8 @@ void readBytes(uint8_t address_tx, uint8_t address_rx, uint8_t subAddress,
 	//i2c.read(address, data, count, 0);
 
 
-	HAL_I2C_Master_Transmit_IT(&hi2c2, address_tx, data_write, 1);
-	HAL_I2C_Master_Transmit_IT(&hi2c2, address_rx, data, count);
+	HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 1, 10);
+	HAL_I2C_Master_Receive(&hi2c2, address_rx, data, count, 10);
 
 	for (int ii = 0; ii < count; ii++) {
 		dest[ii] = data[ii];

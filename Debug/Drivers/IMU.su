@@ -3,9 +3,9 @@ IMU.c:261:7:get_pitch	0	static
 IMU.c:266:7:get_yaw	0	static
 IMU.c:273:6:timer_reset	0	static
 IMU.c:287:6:writeByte	24	static
-IMU.c:299:6:readByte	24	static
+IMU.c:299:6:readByte	32	static
 IMU.c:77:19:imu_init	8	static
-IMU.c:313:6:readBytes	48	static
+IMU.c:313:6:readBytes	56	static
 IMU.c:330:6:getMres	0	static
 IMU.c:344:6:getGres	0	static
 IMU.c:364:6:getAres	0	static
