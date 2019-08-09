@@ -42,7 +42,7 @@
 
 //Min and max counter load value for timer4, which handles PWM generation. ESC_MIN = 125us pulse
 //and ESC_MAX = 250us pulse (OneShot125 protocol)
-#define ESC_MIN 1250
+#define ESC_MIN 1280
 #define ESC_MAX 2500
 //How many of same pulse to send before updating with new value
 #define PULSE_DIV 4
@@ -115,7 +115,7 @@ int16_t L_Joystick_YPos;
 int16_t R_Joystick_XPos;
 int16_t R_Joystick_YPos;
 
-float batteryLevel = 0;
+int batteryLevel = 0;
 uint16_t loop_counter = 0;
 
 /** For debugging and tuning PID control, data storage buffer for
@@ -255,26 +255,27 @@ int main(void) {
 	HAL_TIM_Base_Start(&htim11);
 
 	//Start timer 3 in interrupt mode, used for DMA timeout
-	HAL_TIM_Base_Start_IT(&htim3);
-	HAL_TIM_OC_Start_IT(&htim3, TIM_CHANNEL_1);
+//	HAL_TIM_Base_Start_IT(&htim3);
+//	HAL_TIM_OC_Start_IT(&htim3, TIM_CHANNEL_1);
 
 	//Start up PWMs
-	HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_1);
-	HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_2);
-	HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_3);
-	HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_4);
-
-
-
 
 #if MOTORS
+
+	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
+	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
+	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
+	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_4);
+
 	ARM_ESCs();
+
+	PWM1_Set(1600);
+	PWM2_Set(1600);
+	PWM3_Set(1600);
+	PWM4_Set(1600);
 #endif
 
-		PWM1_Set(1300);
-		PWM2_Set(1300);
-		PWM3_Set(1300);
-		PWM4_Set(1300);
+	int debug;
 
 	/* USER CODE END 2 */
 
@@ -283,6 +284,13 @@ int main(void) {
 	while (1) {
 
 		main_loop = 1;
+
+		HAL_ADC_Start(&hadc1);
+		if (HAL_ADC_PollForConversion(&hadc1, 6) == HAL_OK) {
+			batteryLevel = HAL_ADC_GetValue(&hadc1);
+		}
+
+		HAL_Delay(50);
 
 		/* USER CODE END WHILE */
 
@@ -353,13 +361,13 @@ static void MX_ADC1_Init(void) {
 	hadc1.Instance = ADC1;
 	hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
 	hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-	hadc1.Init.ScanConvMode = DISABLE;
+	hadc1.Init.ScanConvMode = ENABLE;
 	hadc1.Init.ContinuousConvMode = DISABLE;
 	hadc1.Init.DiscontinuousConvMode = DISABLE;
 	hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
 	hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
 	hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-	hadc1.Init.NbrOfConversion = 1;
+	hadc1.Init.NbrOfConversion = 16;
 	hadc1.Init.DMAContinuousRequests = DISABLE;
 	hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
 	if (HAL_ADC_Init(&hadc1) != HAL_OK) {
@@ -367,9 +375,99 @@ static void MX_ADC1_Init(void) {
 	}
 	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
 	 */
-	sConfig.Channel = ADC_CHANNEL_8;
+	sConfig.Channel = ADC_CHANNEL_6;
 	sConfig.Rank = 1;
 	sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+	 */
+	sConfig.Rank = 2;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+	 */
+	sConfig.Rank = 3;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+	 */
+	sConfig.Rank = 4;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+	 */
+	sConfig.Rank = 5;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+	 */
+	sConfig.Rank = 6;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+	 */
+	sConfig.Rank = 7;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+	 */
+	sConfig.Rank = 8;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+	 */
+	sConfig.Rank = 9;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+	 */
+	sConfig.Rank = 10;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+	 */
+	sConfig.Rank = 11;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+	 */
+	sConfig.Rank = 12;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+	 */
+	sConfig.Rank = 13;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+	 */
+	sConfig.Rank = 14;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+	 */
+	sConfig.Rank = 15;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+	 */
+	sConfig.Rank = 16;
 	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
 		Error_Handler();
 	}
@@ -693,13 +791,13 @@ static void MX_GPIO_Init(void) {
 	;
 
 	/*Configure GPIO pin Output Level */
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5 | GPIO_PIN_6, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
 
 	/*Configure GPIO pin Output Level */
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12 | GPIO_PIN_14, GPIO_PIN_RESET);
 
-	/*Configure GPIO pins : PA5 PA6 */
-	GPIO_InitStruct.Pin = GPIO_PIN_5 | GPIO_PIN_6;
+	/*Configure GPIO pin : PA5 */
+	GPIO_InitStruct.Pin = GPIO_PIN_5;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -728,11 +826,9 @@ static void MX_GPIO_Init(void) {
 
 void ARM_ESCs() {
 
-	//HAL_Delay(2000); //Wait
+	HAL_Delay(2000); //Wait
 
-	HAL_Delay(100);
-
-	int delay_time = 10000;
+	int delay_time = 8000;
 
 	PWM1_Set(ESC_MAX); //Send max value (250us pulse)
 	PWM2_Set(ESC_MAX); //Send max value (250us pulse)
@@ -827,9 +923,14 @@ void pulse_posedge_handler() {
 		//Map throttle joystick reading (12 bit ADC range 0-4095) to ESC range
 		throttle = map(L_Joystick_YPos, 800, 3300, ESC_MIN, ESC_MAX);
 
-		//Implement a cutoff for the bottom end
-		if(throttle < 1350){
-			throttle = 1250;
+		//Implement a deadzone for the bottom end of values
+		if (throttle < ESC_MIN + 100) {
+			throttle = ESC_MIN;
+		}
+
+		//Implement a deadzone for the top end of values
+		if (throttle > ESC_MAX - 100) {
+			throttle = ESC_MAX;
 		}
 
 		//Map right joystick X axis to roll set point
@@ -842,17 +943,18 @@ void pulse_posedge_handler() {
 		tim3_count = htim11.Instance->CNT; //read TIM11 counter value, used for integral calculations
 		calc_RollPitchYaw(tim3_count);
 
-		//Pitch PID calculation
+		/**    Pitch PID calculation  **/
 		imu_pitch = get_pitch();
 		//tim3_count = htim3.Instance->CNT;
 		//pid_output_pitch = pid_calculate_pitch(imu_pitch, tim3_count, pitch_setpoint);
 
-		//Roll PID calculation
+		/*******    Roll PID calculation  ********/
+
 		imu_roll = get_roll();
+		//pid_output_roll = pid_calculate_roll(imu_roll, 9, roll_setpoint);
 
 		//Offset roll because IMU is upside down, comment out if not
 		bool done = 0;
-
 		if (imu_roll > 0 && !done) {
 			imu_roll -= 180.0f;
 			done = 1;
@@ -865,7 +967,8 @@ void pulse_posedge_handler() {
 		//tim3_count = htim3.Instance->CNT;
 		//pid_output_roll = pid_calculate_roll(imu_roll, tim3_count, roll_setpoint);
 
-		//Yaw PID calculation
+		/*******    Yaw PID calculation  ********/
+
 		imu_yaw = get_yaw();
 		//tim3_count = htim3.Instance->CNT;
 		pid_output_yaw = pid_calculate_yaw(imu_yaw, tim3_count, yaw_setpoint);
