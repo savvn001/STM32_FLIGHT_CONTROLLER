@@ -78,7 +78,7 @@ DMA_HandleTypeDef hdma_usart6_tx;
 
 /* USER CODE BEGIN PV */
 
-int throttle = 200;
+int throttle = 0;
 
 int esc1_total = 0;
 int esc2_total = 0;
@@ -106,17 +106,18 @@ bool main_loop = 0;
 uint64_t TxpipeAddrs = 0x11223344AA;
 char RxData[32];
 
-char AckPayload_0[18];
+char AckPayload_0[32];
 char AckPayload_1[32] = "Ack by Drone!";
 
 //These hold the received joystick positions from the transmitter, left and right respectively
-int16_t L_Joystick_XPos;
-int16_t L_Joystick_YPos;
+int16_t L_Joystick_XPos = 0;
+int16_t L_Joystick_YPos = 1100;
 int16_t R_Joystick_XPos;
 int16_t R_Joystick_YPos;
 
 int batteryLevel = 0;
 uint16_t loop_counter = 0;
+bool airmode = 0;
 
 /** For debugging and tuning PID control, data storage buffer for
  *  printing afterwards to evaluate system response, can comment out later to save RAM
@@ -139,6 +140,9 @@ int print_buffer_index = 0;
 
 //1 if NRF24 module connected
 #define NRF24 1
+
+//1 if using battery
+#define BATTERY 0
 
 /* USER CODE END PV */
 
@@ -232,6 +236,12 @@ int main(void) {
 		imu_calibrate();
 	}
 
+	for (int i = 0; i < 31; ++i) {
+		AckPayload_0[i] = 0;
+		AckPayload_1[i] = 0;
+
+	}
+
 	//HAL_UART_Receive_DMA(&huart6, GPS_RX_Buffer, 600);
 
 	/**** Init NRF24L01 Module ***/
@@ -260,20 +270,17 @@ int main(void) {
 
 	//Start up PWMs
 
-#if MOTORS
-
 	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
 	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
 	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
 	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_4);
 
-	ARM_ESCs();
+	//ARM_ESCs();
 
-	PWM1_Set(1600);
-	PWM2_Set(1600);
-	PWM3_Set(1600);
-	PWM4_Set(1600);
-#endif
+	PWM1_Set(2500);
+	PWM2_Set(2500);
+	PWM3_Set(2500);
+	PWM4_Set(2500);
 
 	int debug;
 
@@ -289,6 +296,18 @@ int main(void) {
 		if (HAL_ADC_PollForConversion(&hadc1, 6) == HAL_OK) {
 			batteryLevel = HAL_ADC_GetValue(&hadc1);
 		}
+
+#if BATTERY
+		//Shut off PWM when battery level too low
+		if(batteryLevel == 3600){
+			HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_1);
+			HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_2);
+			HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_3);
+			HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_4);
+
+		}
+
+#endif
 
 		HAL_Delay(50);
 
@@ -803,6 +822,12 @@ static void MX_GPIO_Init(void) {
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+	/*Configure GPIO pin : kill_Pin */
+	GPIO_InitStruct.Pin = kill_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+	GPIO_InitStruct.Pull = GPIO_PULLUP;
+	HAL_GPIO_Init(kill_GPIO_Port, &GPIO_InitStruct);
+
 	/*Configure GPIO pins : PB12 PB14 */
 	GPIO_InitStruct.Pin = GPIO_PIN_12 | GPIO_PIN_14;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -817,6 +842,9 @@ static void MX_GPIO_Init(void) {
 	HAL_GPIO_Init(PWM_RE_INT_GPIO_Port, &GPIO_InitStruct);
 
 	/* EXTI interrupt init*/
+	HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(EXTI4_IRQn);
+
 	HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
 	HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
@@ -921,15 +949,15 @@ void pulse_posedge_handler() {
 #endif
 
 		//Map throttle joystick reading (12 bit ADC range 0-4095) to ESC range
-		throttle = map(L_Joystick_YPos, 800, 3300, ESC_MIN, ESC_MAX);
+		throttle = map(L_Joystick_YPos, 850, 3300, ESC_MIN, ESC_MAX);
 
 		//Implement a deadzone for the bottom end of values
-		if (throttle < ESC_MIN + 100) {
+		if (throttle < ESC_MIN + 200) {
 			throttle = ESC_MIN;
 		}
 
 		//Implement a deadzone for the top end of values
-		if (throttle > ESC_MAX - 100) {
+		if (throttle > ESC_MAX - 200) {
 			throttle = ESC_MAX;
 		}
 
@@ -943,35 +971,44 @@ void pulse_posedge_handler() {
 		tim3_count = htim11.Instance->CNT; //read TIM11 counter value, used for integral calculations
 		calc_RollPitchYaw(tim3_count);
 
-		/**    Pitch PID calculation  **/
-		imu_pitch = get_pitch();
-		//tim3_count = htim3.Instance->CNT;
-		//pid_output_pitch = pid_calculate_pitch(imu_pitch, tim3_count, pitch_setpoint);
+		if (airmode) {
 
-		/*******    Roll PID calculation  ********/
+			/*******    Pitch PID calculation  ********/
+			imu_pitch = get_pitch();
+			//pid_output_pitch = pid_calculate_pitch(imu_pitch, tim3_count, pitch_setpoint);
 
-		imu_roll = get_roll();
-		//pid_output_roll = pid_calculate_roll(imu_roll, 9, roll_setpoint);
+			/*******    Roll PID calculation  ********/
 
-		//Offset roll because IMU is upside down, comment out if not
-		bool done = 0;
-		if (imu_roll > 0 && !done) {
-			imu_roll -= 180.0f;
-			done = 1;
+			imu_roll = get_roll();
+			pid_output_roll = pid_calculate_roll(imu_roll, 0, 0);
+
+			//Offset roll because IMU is upside down, comment out if not
+			bool done = 0;
+			if (imu_roll > 0 && !done) {
+				imu_roll -= 180.0f;
+				done = 1;
+			}
+			if (imu_roll < 0 && !done) {
+				imu_roll += 180.0f;
+				done = 1;
+			}
+
+			/*******    Yaw PID calculation  ********/
+
+			imu_yaw = get_yaw();
+			pid_output_yaw = pid_calculate_yaw(imu_yaw, tim3_count,
+					yaw_setpoint);
+
 		}
-		if (imu_roll < 0 && !done) {
-			imu_roll += 180.0f;
-			done = 1;
+		else{
+			pid_output_roll = 0;
+			pid_output_pitch = 0;
+			pid_output_yaw = 0;
+			reset_pid_roll();
+			reset_pid_pitch();
+			reset_pid_yaw();
+
 		}
-
-		//tim3_count = htim3.Instance->CNT;
-		//pid_output_roll = pid_calculate_roll(imu_roll, tim3_count, roll_setpoint);
-
-		/*******    Yaw PID calculation  ********/
-
-		imu_yaw = get_yaw();
-		//tim3_count = htim3.Instance->CNT;
-		pid_output_yaw = pid_calculate_yaw(imu_yaw, tim3_count, yaw_setpoint);
 
 		/*** For tuning PID, store in buffer to print to PC later ***/
 #if PID_TUNE_DEBUG
@@ -1016,12 +1053,14 @@ void pulse_posedge_handler() {
 		if (esc4_total > ESC_MAX) {
 			esc4_total = ESC_MAX;
 		}
-
+#if MOTORS
 		//Load new pulse widths into ESCs
 		PWM1_Set(esc1_total); //PWM1 = Back left, CW
 		PWM2_Set(esc2_total); //PWM2 = Front left, CCW
 		PWM3_Set(esc3_total); //PWM3 = Back right, CCW
 		PWM4_Set(esc4_total); //PWM4 = Front right, CW
+
+#endif
 
 	}
 
@@ -1081,6 +1120,15 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
 		pulse_posedge_handler();
 		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
+	}
+
+	if (GPIO_Pin == kill_Pin && main_loop) {
+		HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_1);
+		HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_2);
+		HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_3);
+		HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_4);
+
+		int brk;
 	}
 
 }
