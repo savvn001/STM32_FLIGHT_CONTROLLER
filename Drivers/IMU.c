@@ -187,7 +187,7 @@ void calc_RollPitchYaw(int counter_value) {
 	if(Now - lastUpdate < 0){
 		//Take time difference taking into account reset of timer
 		//Formula for getting timer count into seconds = COUNT * (1/TIMER_CLK)*PRESCALER
-		//deltat = (float) (((65535-lastUpdate)+Now) * (1 / (TIMER_CLK_FREQ / 2000.0f)));
+		deltat = (float) (((65535-lastUpdate)+Now) * (1 / (TIMER_CLK_FREQ / 2000.0f)));
 
 
 		//Calculating time difference using ARM DSP Library:

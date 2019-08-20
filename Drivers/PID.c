@@ -12,23 +12,21 @@
 #include "PID.h"
 
 #define TIMER_CLK_FREQ 100000000.0f
-/* Time of loop control loop configured as 500Hz (verified with scope), so
+/* Time of loop control loop configured as 500Hz, so
  * delta_t is the time period of this and used in the PID calculations as
  * the time difference between each sample point */
 #define delta_t 0.002
 
 /********************** roll Axis PID control variables *****************************/
 
-//PID gain values
-float roll_p_gain = 9;
-float roll_i_gain = 0.8;
-float roll_d_gain = 1.0;
+
 
 float roll_output_temp = 0;
 float roll_error = 0;
 float roll_p;
 float roll_i;
 float roll_d;
+
 float roll_output = 0;
 float roll_last_d_error = 0;
 
