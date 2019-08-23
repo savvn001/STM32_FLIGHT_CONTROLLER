@@ -48,6 +48,9 @@
 #define PULSE_DIV 4
 #define CRTL_LOOP_FREQ 500
 
+//Value of ADC reading that corresponds to around 11.5V - will shut off to protect battery (3S)
+#define ADC_BATTERY_SHUTOFF 3630
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -72,9 +75,6 @@ TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim11;
 
 UART_HandleTypeDef huart2;
-UART_HandleTypeDef huart6;
-DMA_HandleTypeDef hdma_usart6_rx;
-DMA_HandleTypeDef hdma_usart6_tx;
 
 /* USER CODE BEGIN PV */
 
@@ -118,6 +118,7 @@ int16_t R_Joystick_YPos;
 uint16_t batteryLevel = 0;
 uint16_t loop_counter = 0;
 char airmode = 0;
+char kill_rx = 0;
 
 /** For debugging and tuning PID control, data storage buffer for
  *  printing afterwards to evaluate system response, can comment out later to save RAM
@@ -155,11 +156,9 @@ int print_buffer_index = 0;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_TIM4_Init(void);
-static void MX_USART6_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_TIM3_Init(void);
@@ -192,6 +191,9 @@ void unpackRxData();
 void packAckPayData_0();
 void packAckPayData_1();
 void breakpoint();
+void resetNRF24();
+void kill();
+uint16_t packetsLostCtr = 0;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -228,11 +230,9 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_I2C2_Init();
   MX_TIM4_Init();
-  MX_USART6_UART_Init();
   MX_ADC1_Init();
   MX_SPI2_Init();
   MX_TIM3_Init();
@@ -277,8 +277,8 @@ int main(void)
 	DWT_Init(); //Enable some of the MCUs special registers so we can get microsecond (us) delays
 	NRF24_begin(GPIOB, nrf_CSN_PIN, nrf_CE_PIN, hspi2);
 	nrf24_DebugUART_Init(huart2);
-	NRF24_setAutoAck(true);
 	NRF24_enableAckPayload();
+	NRF24_setAutoAck(true);
 	NRF24_openReadingPipe(1, TxpipeAddrs);
 	NRF24_startListening();
 
@@ -293,7 +293,6 @@ int main(void)
 	HAL_TIM_Base_Start(&htim11);
 
 	//Start up PWMs
-
 	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
 	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
 	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
@@ -322,14 +321,9 @@ int main(void)
 				batteryLevel = HAL_ADC_GetValue(&hadc1);
 			}
 
-
 		//Shut off PWM when battery level too low
-		if(batteryLevel == 3600){
-			HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_1);
-			HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_2);
-			HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_3);
-			HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_4);
-			breakpoint();
+		if(batteryLevel < ADC_BATTERY_SHUTOFF){
+		kill();
 
 		}
 
@@ -494,7 +488,7 @@ static void MX_SPI2_Init(void)
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -702,57 +696,6 @@ static void MX_USART2_UART_Init(void)
 }
 
 /**
-  * @brief USART6 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART6_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART6_Init 0 */
-
-  /* USER CODE END USART6_Init 0 */
-
-  /* USER CODE BEGIN USART6_Init 1 */
-
-  /* USER CODE END USART6_Init 1 */
-  huart6.Instance = USART6;
-  huart6.Init.BaudRate = 9600;
-  huart6.Init.WordLength = UART_WORDLENGTH_8B;
-  huart6.Init.StopBits = UART_STOPBITS_1;
-  huart6.Init.Parity = UART_PARITY_NONE;
-  huart6.Init.Mode = UART_MODE_TX_RX;
-  huart6.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart6.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart6) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART6_Init 2 */
-
-  /* USER CODE END USART6_Init 2 */
-
-}
-
-/** 
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void) 
-{
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA2_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA2_Stream1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 0, 2);
-  HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);
-  /* DMA2_Stream6_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream6_IRQn, 0, 2);
-  HAL_NVIC_EnableIRQ(DMA2_Stream6_IRQn);
-
-}
-
-/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -770,6 +713,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, TEST_Pin|GPIO_PIN_6, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12|GPIO_PIN_14, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : PA5 */
@@ -785,12 +731,26 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(kill_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : TEST_Pin */
+  GPIO_InitStruct.Pin = TEST_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(TEST_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pins : PB12 PB14 */
   GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_14;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PC6 */
+  GPIO_InitStruct.Pin = GPIO_PIN_6;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PWM_RE_INT_Pin */
   GPIO_InitStruct.Pin = PWM_RE_INT_Pin;
@@ -868,14 +828,13 @@ void PWM4_Set(uint16_t value) {
  * (1 CW)     (3 CCW)
  *
  * This function gets called by the GPIO_EXTI callback when the PWM_RE_INT_Pin triggers an interrupt,
- * on the rising edge of every PWM signal.
+ * which is on the rising edge of every PWM pulse.
  */
 void pulse_posedge_handler() {
 
 	//Only want this to happen in main loop - not during init sequence
 	if (main_loop) {
 
-		//HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
 
 #if NRF24
 		//Pack acknowledge data 0 - sent every control loop
@@ -889,9 +848,13 @@ void pulse_posedge_handler() {
 			loop_counter++;
 		}
 
+		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_6);
+
 		/* Get data from receiver */
 		if (NRF24_available()) {
 			NRF24_read(RxData, 32);
+
+			packetsLostCtr = 0;
 
 			//Write the acknowledge payload back to the transmitter/controller
 			if (loop_counter == CRTL_LOOP_FREQ - 1) {
@@ -902,12 +865,19 @@ void pulse_posedge_handler() {
 
 			}
 		}
+		else{
+			packetsLostCtr++;
+		}
+
+//		if(packetsLostCtr > 10){
+//			lostConnection();
+//		}
 
 		//Unpack the 32 byte payload from controller
 		unpackRxData();
 #endif
 
-		//Map throttle joystick reading (12 bit ADC range 0-4095) to ESC range
+		//Map throttle joystick reading to ESC range
 		throttle = map(L_Joystick_YPos, 850, 3300, ESC_MIN, ESC_MAX);
 
 		//Implement a deadzone for the bottom end of values
@@ -921,10 +891,10 @@ void pulse_posedge_handler() {
 		}
 
 		//Map right joystick X axis to roll set point
-		//roll_setpoint = map(R_Joystick_XPos, 0, 4095, -33, 33);
+		roll_setpoint = map(R_Joystick_XPos, 330, 4000, -50, 50);
 
 		//Map right joystick Y axis to roll set point
-		//pitch_setpoint = map(R_Joystick_YPos, 0, 4095, -33, 33);
+		pitch_setpoint = map(R_Joystick_YPos, 350, 4000, -50, 50);
 
 		//Calculate roll, pitch & yaw using IMU readings
 		tim3_count = htim11.Instance->CNT; //read TIM11 counter value, used for integral calculations
@@ -948,12 +918,11 @@ void pulse_posedge_handler() {
 		if (airmode) {
 
 			/*******    Pitch PID calculation  ********/
-			//pid_output_pitch = pid_calculate_pitch(imu_pitch, tim3_count, pitch_setpoint);
-
+			pid_output_pitch = pid_calculate_pitch(imu_pitch, 0, 0);
 
 			/*******    Roll PID calculation  ********/
 
-			pid_output_roll = pid_calculate_roll(imu_roll, 0, 0);
+			pid_output_roll = pid_calculate_roll(imu_roll, 0, roll_setpoint);
 
 			/*******    Yaw PID calculation  ********/
 
@@ -980,10 +949,10 @@ void pulse_posedge_handler() {
 #endif
 
 		//Calculate new pulse width values
-		esc1_total = throttle - (int) pid_output_roll;
-		esc2_total = throttle - (int) pid_output_roll;
-		esc3_total = (throttle) + (int) pid_output_roll;
-		esc4_total = (throttle) + (int) pid_output_roll;
+		esc1_total = throttle - (int) pid_output_roll - (int) pid_output_pitch;
+		esc2_total = throttle - (int) pid_output_roll + (int) pid_output_pitch;
+		esc3_total = (throttle) + (int) pid_output_roll	- (int) pid_output_pitch;
+		esc4_total = (throttle) + (int) pid_output_roll + (int) pid_output_pitch;
 
 		//Clip PWM values to make sure they don't go outside of range
 		if (esc1_total < ESC_MIN) {
@@ -1080,12 +1049,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	}
 
 	if (GPIO_Pin == kill_Pin && main_loop) {
-		HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_1);
-		HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_2);
-		HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_3);
-		HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_4);
-
-		int brk;
+		//kill();
 	}
 
 }
@@ -1097,17 +1061,24 @@ void unpackRxData() {
 	L_Joystick_YPos = (RxData[2] & 0xFF) | (RxData[3] << 8);
 	R_Joystick_XPos = (RxData[4] & 0xFF) | (RxData[5] << 8);
 	R_Joystick_YPos = (RxData[6] & 0xFF) | (RxData[7] << 8);
-	airmode = RxData[8];
 
-	//Unpack PID data from
+	airmode = (RxData[8] >> 0) & 1;
+
+	kill_rx = (RxData[8] >> 1) & 1;
+
+	if (kill_rx) {
+		kill();
+	}
+
+	//Unpack PID data
 	uint16_t roll_p_rx = (RxData[9] & 0xFF) | (RxData[10] << 8);
 	uint16_t roll_i_rx = (RxData[11] & 0xFF) | (RxData[12] << 8);
 	uint16_t roll_d_rx = (RxData[13] & 0xFF) | (RxData[14] << 8);
 
 	//Remap
-	roll_p_gain = (float) roll_p_rx / 100;
-	roll_i_gain = (float) roll_i_rx / 100;
-	roll_d_gain = (float) roll_d_rx / 100;
+	pitch_p_gain = (float) roll_p_rx / 100;
+	pitch_i_gain = (float) roll_i_rx / 100;
+	pitch_d_gain = (float) roll_d_rx / 100;
 
 }
 
@@ -1145,46 +1116,46 @@ void packAckPayData_1() {
 	//ID for packet 1
 	AckPayload_1[0] = 0xFF;
 
-	//Next few bytes are just 1 Byte values
-	AckPayload_1[1] = GPS.satellites;
-	AckPayload_1[2] = GPS.day;
-	AckPayload_1[3] = GPS.month;
-	AckPayload_1[4] = GPS.year;
-	AckPayload_1[5] = GPS.minute;
-	AckPayload_1[6] = GPS.hour;
-
-	//Next byte = GPS Speed
-	unsigned char temp[sizeof(float)];
-	memcpy(temp, &GPS.speed, sizeof(GPS.speed));
-
-	AckPayload_1[7] = temp[0];
-	AckPayload_1[8] = temp[1];
-	AckPayload_1[9] = temp[2];
-	AckPayload_1[10] = temp[3];
-
-	//Next byte = GPS Latitude
-	memcpy(temp, &GPS.latitude, sizeof(GPS.latitude));
-
-	AckPayload_1[11] = temp[0];
-	AckPayload_1[12] = temp[1];
-	AckPayload_1[13] = temp[2];
-	AckPayload_1[14] = temp[3];
-
-	//Next byte = GPS Longitude
-	memcpy(temp, &GPS.longitude, sizeof(GPS.longitude));
-
-	AckPayload_1[15] = temp[0];
-	AckPayload_1[16] = temp[1];
-	AckPayload_1[17] = temp[2];
-	AckPayload_1[18] = temp[3];
-
-	//Next byte = GPS Altitude
-	memcpy(temp, &GPS.altitude, sizeof(GPS.altitude));
-
-	AckPayload_1[19] = temp[0];
-	AckPayload_1[20] = temp[1];
-	AckPayload_1[21] = temp[2];
-	AckPayload_1[22] = temp[3];
+//	//Next few bytes are just 1 Byte values
+//	AckPayload_1[1] = GPS.satellites;
+//	AckPayload_1[2] = GPS.day;
+//	AckPayload_1[3] = GPS.month;
+//	AckPayload_1[4] = GPS.year;
+//	AckPayload_1[5] = GPS.minute;
+//	AckPayload_1[6] = GPS.hour;
+//
+//	//Next byte = GPS Speed
+//	unsigned char temp[sizeof(float)];
+//	memcpy(temp, &GPS.speed, sizeof(GPS.speed));
+//
+//	AckPayload_1[7] = temp[0];
+//	AckPayload_1[8] = temp[1];
+//	AckPayload_1[9] = temp[2];
+//	AckPayload_1[10] = temp[3];
+//
+//	//Next byte = GPS Latitude
+//	memcpy(temp, &GPS.latitude, sizeof(GPS.latitude));
+//
+//	AckPayload_1[11] = temp[0];
+//	AckPayload_1[12] = temp[1];
+//	AckPayload_1[13] = temp[2];
+//	AckPayload_1[14] = temp[3];
+//
+//	//Next byte = GPS Longitude
+//	memcpy(temp, &GPS.longitude, sizeof(GPS.longitude));
+//
+//	AckPayload_1[15] = temp[0];
+//	AckPayload_1[16] = temp[1];
+//	AckPayload_1[17] = temp[2];
+//	AckPayload_1[18] = temp[3];
+//
+//	//Next byte = GPS Altitude
+//	memcpy(temp, &GPS.altitude, sizeof(GPS.altitude));
+//
+//	AckPayload_1[19] = temp[0];
+//	AckPayload_1[20] = temp[1];
+//	AckPayload_1[21] = temp[2];
+//	AckPayload_1[22] = temp[3];
 
 }
 
@@ -1211,6 +1182,58 @@ void packAckPayData_1() {
 //}
 
 void breakpoint() {
+
+}
+
+/*
+ *  Kill function disables PWM outputs, turning off motors
+ */
+void kill() {
+	HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_1);
+	HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_2);
+	HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_3);
+	HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_4);
+}
+
+
+/*
+ *  In case connection to transmitter is lost, slowly power down motors
+ *  in order to gently lower quadcopter as opposed to suddenly shutting them off
+ *
+ */
+void lostConnection(){
+
+	//Get what the most recent throttle value was
+	int lastThrottle = L_Joystick_YPos;
+
+	//Reset joystick positions to centre
+	R_Joystick_XPos = 2165;
+	R_Joystick_YPos = 2165;
+
+	//Decrease it down to ESC min value
+	while(L_Joystick_YPos > 850){
+	     	L_Joystick_YPos--;
+			HAL_Delay(1);
+	}
+
+	//Turn of motors fully to be sure
+	kill();
+}
+
+/*
+ * Reset NRF24 module
+ */
+void resetNRF24(){
+
+	NRF24_powerDown();
+	DWT_Init(); //Enable some of the MCUs special registers so we can get microsecond (us) delays
+	NRF24_begin(GPIOB, nrf_CSN_PIN, nrf_CE_PIN, hspi2);
+	//nrf24_DebugUART_Init(huart2);
+	NRF24_setAutoAck(true);
+	NRF24_enableAckPayload();
+	NRF24_openReadingPipe(1, TxpipeAddrs);
+	NRF24_startListening();
+
 
 }
 /* USER CODE END 4 */

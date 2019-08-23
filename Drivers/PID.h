@@ -9,10 +9,11 @@
 #define PID_H_
 
 
-//PID gain values
-float roll_p_gain; //9
-float roll_i_gain; //0.8
-float roll_d_gain; //1.0
+float pitch_p_gain;
+float pitch_i_gain;
+float pitch_d_gain;
+
+
 
 float pid_calculate_roll(float IMU_roll_value, int timer_value, float roll_setpoint);
 float pid_calculate_pitch(float IMU_pitch_value, int timer_value, float pitch_setpoint);

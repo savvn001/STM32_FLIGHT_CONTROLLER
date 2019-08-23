@@ -15,7 +15,16 @@
 /* Time of loop control loop configured as 500Hz, so
  * delta_t is the time period of this and used in the PID calculations as
  * the time difference between each sample point */
-#define delta_t 0.002
+#define delta_t 0.001970831691f
+
+//PID gain values
+float roll_p_gain = 2.5; //9
+float roll_i_gain = 2.0; //0.8
+float roll_d_gain = 0.42; //1.0
+
+
+
+
 
 /********************** roll Axis PID control variables *****************************/
 
@@ -79,10 +88,6 @@ void reset_pid_roll(){
 
 /********************** Pitch Axis PID control variables *****************************/
 
-//PID gain values
-float pitch_p_gain = 9;
-float pitch_i_gain = 0.8;
-float pitch_d_gain = 1.0;
 
 float pitch_output_temp = 0;
 float pitch_error = 0;
