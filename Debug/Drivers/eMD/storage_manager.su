@@ -1,0 +1,6 @@
+storage_manager.c:105:12:inv_find_entry	0	static
+storage_manager.c:50:6:inv_init_storage_manager	8	static
+storage_manager.c:66:13:inv_register_load_store	16	static
+storage_manager.c:95:13:inv_get_mpl_state_size	0	static
+storage_manager.c:122:13:inv_load_mpl_states	24	static
+storage_manager.c:172:13:inv_save_mpl_states	32	static

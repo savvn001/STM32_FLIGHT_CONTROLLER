@@ -18,6 +18,7 @@ C_DEPS :=
 SUBDIRS := \
 Drivers \
 Drivers/STM32F4xx_HAL_Driver/Src \
+Drivers/eMD \
 Src \
 Startup \
 

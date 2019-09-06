@@ -9,9 +9,6 @@
 #define PID_H_
 
 
-float pitch_p_gain;
-float pitch_i_gain;
-float pitch_d_gain;
 
 
 

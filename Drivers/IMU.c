@@ -187,7 +187,7 @@ void calc_RollPitchYaw(int counter_value) {
 	if(Now - lastUpdate < 0){
 		//Take time difference taking into account reset of timer
 		//Formula for getting timer count into seconds = COUNT * (1/TIMER_CLK)*PRESCALER
-		deltat = (float) (((65535-lastUpdate)+Now) * (1 / (TIMER_CLK_FREQ / 2000.0f)));
+		deltat = (float) (((65535-lastUpdate)+Now) * (1 / (TIMER_CLK_FREQ / 100.0f)));
 
 
 		//Calculating time difference using ARM DSP Library:
@@ -202,7 +202,7 @@ void calc_RollPitchYaw(int counter_value) {
 		arm_add_f32(&time_difference, &Now, &time_diff_plus_now, 1);
 
 		float32_t top;
-		float32_t prescaler = 999;
+		float32_t prescaler = 100;
 
 		arm_mult_f32(&prescaler, &time_diff_plus_now, &top, 1);
 
@@ -215,7 +215,7 @@ void calc_RollPitchYaw(int counter_value) {
 		float32_t result1 = 0;
 		arm_sub_f32(&Now, &lastUpdate, &result1, 1);
 		float32_t result2 = 0;
-		float32_t prescaler = 999;
+		float32_t prescaler = 100;
 		arm_mult_f32(&result1, &prescaler,&result2, 1);
 
 		deltat = result2/TIMER_CLK_FREQ;

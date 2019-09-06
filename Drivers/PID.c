@@ -18,10 +18,13 @@
 #define delta_t 0.001970831691f
 
 //PID gain values
-float roll_p_gain = 2.5; //9
-float roll_i_gain = 2.0; //0.8
-float roll_d_gain = 0.42; //1.0
+float roll_p_gain = 2.5;   //2.5
+float roll_i_gain = 2.0;   //2.0
+float roll_d_gain = 0.45;  //0.42
 
+float pitch_p_gain = 5.2;  //5.2
+float pitch_i_gain = 1.5;  //1.5
+float pitch_d_gain = 0.25; //0.25
 
 
 
