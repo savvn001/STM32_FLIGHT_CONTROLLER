@@ -1,0 +1,2 @@
+arduino_mpu9250_i2c.c:24:5:arduino_i2c_write	48	static
+arduino_mpu9250_i2c.c:48:5:arduino_i2c_read	40	static

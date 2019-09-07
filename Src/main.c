@@ -28,6 +28,7 @@
 /* USER CODE BEGIN Includes */
 
 #include "../Drivers/IMU.h"
+#include "../Drivers/MPU9250_DMP.h"
 #include "../Drivers/PID.h"
 #include "../Drivers/GPS.h"
 #include <stdbool.h>
@@ -131,7 +132,7 @@ int avgBatteryLevel = 0;
  *  printing afterwards to evaluate system response, can comment out later to save RAM
  *  if needed (approx 20kB needed?)
  */
-#define PID_TUNE_DEBUG 1
+#define PID_TUNE_DEBUG 0
 
 #if PID_TUNE_DEBUG
 
@@ -152,11 +153,12 @@ int print_buffer_index = 0;
 //1 if using battery
 #define BATTERY 1
 
+//Enable ONLY 1 of the two below
 //1 if using IMU
-#define IMU 1
+#define IMU 0
 
 //1 if using MPU9250 with Ivense Motion Driver Library and DMP
-#define IMU_EMD 1
+#define IMU_DMP 1
 
 //1 if using GPS
 #define GPS 0
@@ -268,6 +270,63 @@ int main(void)
 
 	}
 #endif
+
+	//
+	// Init using Sparkfun DMP library (ported to this platform)
+	//
+#if IMU_DMP
+
+	//Check device communication is ok then begin
+	if (HAL_I2C_IsDeviceReady(&hi2c2, 0xD0, 2, 100) == HAL_OK) {
+
+		if (imu_begin() != INV_SUCCESS) {
+			while (1) {
+			// Failed to initialize MPU-9250, loop forever
+			}
+		} else {
+			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5); //Toggle LED on if so
+		}
+	}
+
+	 imu_dmpBegin(DMP_FEATURE_6X_LP_QUAT | // Enable 6-axis quat
+	               DMP_FEATURE_GYRO_CAL, // Use gyro calibration
+	              200); // Set DMP FIFO rate to 10 Hz
+	  // DMP_FEATURE_LP_QUAT can also be used. It uses the
+	  // accelerometer in low-power mode to estimate quat's.
+	  // DMP_FEATURE_LP_QUAT and 6X_LP_QUAT are mutually exclusive
+
+	// Use setSensors to turn on or off MPU-9250 sensors.
+	// Any of the following defines can be combined:
+	// INV_XYZ_GYRO, INV_XYZ_ACCEL, INV_XYZ_COMPASS,
+	// INV_X_GYRO, INV_Y_GYRO, or INV_Z_GYRO
+	imu_setSensors(INV_XYZ_GYRO | INV_XYZ_ACCEL | INV_XYZ_COMPASS); // Enable all sensors
+
+
+	// Use setGyroFSR() and setAccelFSR() to configure the
+	// gyroscope and accelerometer full scale ranges.
+	// Gyro options are +/- 250, 500, 1000, or 2000 dps
+	imu_setGyroFSR(2000); // Set gyro to 2000 dps
+	// Accel options are +/- 2, 4, 8, or 16 g
+	imu_setAccelFSR(2); // Set accel to +/-2g
+
+
+	// setLPF() can be used to set the digital low-pass filter
+	// of the accelerometer and gyroscope.
+	// Can be any of the following: 188, 98, 42, 20, 10, 5
+	// (values are in Hz).
+	imu_setLPF(5); // Set LPF corner frequency to 5Hz
+
+	// The sample rate of the accel/gyro can be set using
+	// setSampleRate. Acceptable values range from 4Hz to 1kHz
+	imu_setSampleRate(1000); // Set sample rate to 10Hz
+
+	// Likewise, the compass (magnetometer) sample rate can be
+	// set using the setCompassSampleRate() function.
+	// This value can range between: 1-100Hz
+	imu_setCompassSampleRate(100); // Set mag rate to 10Hz
+
+#endif
+
 
 	/////////////////////////////////////////////////////////////////
 	/////////////////////////////// GPS /////////////////////////////
@@ -853,6 +912,7 @@ void pulse_posedge_handler() {
 
 #endif
 
+#if IMU
 		//Calculate roll, pitch & yaw using IMU readings
 		tim11_count = htim11.Instance->CNT; //read TIM11 counter value, used for integral calculations
 		calc_RollPitchYaw(tim11_count);
@@ -860,7 +920,27 @@ void pulse_posedge_handler() {
 		imu_pitch = get_pitch();
 		imu_roll = get_roll();
 		imu_yaw = get_yaw();
+#endif
 
+#if IMU_DMP
+
+		// Check for new data in the FIFO
+		  if ( imu_fifoAvailable() )
+		  {
+		    // Use dmpUpdateFifo to update the ax, gx, mx, etc. values
+		    if ( imu_dmpUpdateFifo() == INV_SUCCESS)
+		    {
+		      // computeEulerAngles can be used -- after updating the
+		      // quaternion values -- to estimate roll, pitch, and yaw
+		      imu_computeEulerAngles(1);
+		    }
+		  }
+
+		imu_pitch = imu_get_pitch();
+		imu_roll = imu_get_roll();
+		imu_yaw = imu_get_yaw();
+
+#endif
 		//Offset roll because IMU is upside down, comment out if not
 //		bool done = 0;
 //		if (imu_roll > 0 && !done) {
@@ -1029,9 +1109,9 @@ void unpackRxData() {
 	}
 
 	//Unpack PID data
-	uint16_t roll_p_rx = (RxData[9] & 0xFF) | (RxData[10] << 8);
-	uint16_t roll_i_rx = (RxData[11] & 0xFF) | (RxData[12] << 8);
-	uint16_t roll_d_rx = (RxData[13] & 0xFF) | (RxData[14] << 8);
+//	uint16_t roll_p_rx = (RxData[9] & 0xFF) | (RxData[10] << 8);
+//	uint16_t roll_i_rx = (RxData[11] & 0xFF) | (RxData[12] << 8);
+//	uint16_t roll_d_rx = (RxData[13] & 0xFF) | (RxData[14] << 8);
 
 //	//Remap
 //	pitch_p_gain = (float) roll_p_rx / 100;

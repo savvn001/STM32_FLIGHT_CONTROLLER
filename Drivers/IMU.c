@@ -303,7 +303,6 @@ char readByte(uint8_t address_tx, uint8_t address_rx, uint8_t subAddress) {
 	//i2c.write(address, data_write, 1, 1); // no stop
 	//i2c.read(address, data, 1, 0);
 
-
 	HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 1, 10); //Send adress of register ONLY
 	HAL_I2C_Master_Receive(&hi2c2, address_tx, data, 1, 10);
 

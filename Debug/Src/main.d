@@ -32,8 +32,11 @@ Src/main.o: ../Src/main.c ../Inc/main.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Src/../Drivers/IMU.h ../Src/../Drivers/PID.h ../Src/../Drivers/GPS.h \
+ ../Src/../Drivers/IMU.h ../Src/../Drivers/MPU9250_DMP.h \
  ../Inc/arm_math.h ../Drivers/CMSIS/Include/cmsis_compiler.h \
+ ../Src/../Drivers/util/inv_mpu.h \
+ ../Src/../Drivers/util/inv_mpu_dmp_motion_driver.h \
+ ../Src/../Drivers/PID.h ../Src/../Drivers/GPS.h \
  ../Src/../Drivers/MY_NRF24.h ../Src/../Drivers/nRF24L01.h \
  ../Src/../Drivers/dwt_delay.h
 
@@ -107,13 +110,19 @@ Src/main.o: ../Src/main.c ../Inc/main.h \
 
 ../Src/../Drivers/IMU.h:
 
-../Src/../Drivers/PID.h:
-
-../Src/../Drivers/GPS.h:
+../Src/../Drivers/MPU9250_DMP.h:
 
 ../Inc/arm_math.h:
 
 ../Drivers/CMSIS/Include/cmsis_compiler.h:
+
+../Src/../Drivers/util/inv_mpu.h:
+
+../Src/../Drivers/util/inv_mpu_dmp_motion_driver.h:
+
+../Src/../Drivers/PID.h:
+
+../Src/../Drivers/GPS.h:
 
 ../Src/../Drivers/MY_NRF24.h:
 

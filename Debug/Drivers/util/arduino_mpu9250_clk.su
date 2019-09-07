@@ -1,0 +1,2 @@
+arduino_mpu9250_clk.c:21:5:arduino_get_clock_ms	8	static
+arduino_mpu9250_clk.c:27:5:arduino_delay_ms	8	static
