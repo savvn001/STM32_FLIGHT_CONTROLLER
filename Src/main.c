@@ -96,6 +96,7 @@ bool getRPY_flag = 0;
 float imu_roll;
 float imu_pitch;
 float imu_yaw;
+float imu_heading;
 /* PID */
 float roll_setpoint = 0;
 float pitch_setpoint = 0;
@@ -148,20 +149,21 @@ int print_buffer_index = 0;
 #define MOTORS 1
 
 //1 if NRF24 module connected
-#define NRF24 1
+#define NRF24 0
 
 //1 if using battery
 #define BATTERY 1
 
+//1 if using GPS module
+#define GPS 0
+
 //Enable ONLY 1 of the two below
-//1 if using IMU
+//1 if using IMU (Kris winer MBED Library, fusion algorithm on MCU)
 #define IMU 0
 
 //1 if using MPU9250 with Ivense Motion Driver Library and DMP
-#define IMU_DMP 1
+#define IMU_DMP 1 //DMP offloads fusion
 
-//1 if using GPS
-#define GPS 0
 
 /* USER CODE END PV */
 
@@ -271,10 +273,10 @@ int main(void)
 	}
 #endif
 
-	//
-	// Init using Sparkfun DMP library (ported to this platform)
-	//
+
 #if IMU_DMP
+
+	/***** Init using Sparkfun DMP library (ported to this platform) ****/
 
 	//Check device communication is ok then begin
 	if (HAL_I2C_IsDeviceReady(&hi2c2, 0xD0, 2, 100) == HAL_OK) {
@@ -288,12 +290,10 @@ int main(void)
 		}
 	}
 
-	 imu_dmpBegin(DMP_FEATURE_6X_LP_QUAT | // Enable 6-axis quat
-	               DMP_FEATURE_GYRO_CAL, // Use gyro calibration
-	              200); // Set DMP FIFO rate to 10 Hz
-	  // DMP_FEATURE_LP_QUAT can also be used. It uses the
-	  // accelerometer in low-power mode to estimate quat's.
-	  // DMP_FEATURE_LP_QUAT and 6X_LP_QUAT are mutually exclusive
+
+	///////////////////////////// Init DMP /////////////////////////
+	imu_dmpBegin(DMP_FEATURE_6X_LP_QUAT,
+	              200);                         // Set update rate to 10Hz.
 
 	// Use setSensors to turn on or off MPU-9250 sensors.
 	// Any of the following defines can be combined:
@@ -314,16 +314,39 @@ int main(void)
 	// of the accelerometer and gyroscope.
 	// Can be any of the following: 188, 98, 42, 20, 10, 5
 	// (values are in Hz).
-	imu_setLPF(5); // Set LPF corner frequency to 5Hz
+	imu_setLPF(42); // Set LPF corner frequency to 42Hz
 
 	// The sample rate of the accel/gyro can be set using
 	// setSampleRate. Acceptable values range from 4Hz to 1kHz
-	imu_setSampleRate(1000); // Set sample rate to 10Hz
+	imu_setSampleRate(1000); // Set sample rate to max
 
 	// Likewise, the compass (magnetometer) sample rate can be
 	// set using the setCompassSampleRate() function.
 	// This value can range between: 1-100Hz
-	imu_setCompassSampleRate(100); // Set mag rate to 10Hz
+	imu_setCompassSampleRate(100); // Set mag rate to max
+
+
+	///////////////////////// IMU Calibration /////////////////////////
+	/*
+	 * 	Will need to do this once with each new MPU9250 used.
+	 *	Essentially the process is:
+	 *
+	 *		- Run imu_selfTest(1) which should automatically work out what the biases need to be.
+	 *		  Using the debugger note down the values stored into the gyro[3], accel[3] arrays.
+	 *
+	 *
+	 *
+	 */
+
+//
+//	//Result of 0x07 = all sensors working
+//	if (imu_selfTest(0) != 0x07) {
+//		while (1);
+//	}
+
+
+
+
 
 #endif
 
@@ -936,9 +959,13 @@ void pulse_posedge_handler() {
 		    }
 		  }
 
-		imu_pitch = imu_get_pitch();
-		imu_roll = imu_get_roll();
-		imu_yaw = imu_get_yaw();
+		imu_pitch = imu_get_pitch() + 0.0;
+		imu_roll = imu_get_roll() + 0;
+		imu_yaw = imu_get_yaw() + 0;
+
+		//Get compass heading
+		imu_updateCompass();
+		imu_heading = imu_computeCompassHeading();
 
 #endif
 		//Offset roll because IMU is upside down, comment out if not

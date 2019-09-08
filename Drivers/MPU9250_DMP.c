@@ -48,6 +48,7 @@ static bool _tap_available;
 static void orient_cb(unsigned char orient);
 static void tap_cb(unsigned char direction, unsigned char count);
 
+long gyro[3], accel[3];
 
 float imu_get_roll(){
 return roll;
@@ -387,8 +388,13 @@ inv_error_t imu_updateTemperature(void)
 
 int imu_selfTest(unsigned char debug)
 {
-	long gyro[3], accel[3];
-	return mpu_run_self_test(gyro, accel);
+
+	int result = mpu_run_6500_self_test(gyro, accel,0);
+
+	mpu_set_gyro_bias_reg(gyro);
+	mpu_set_accel_bias_6500_reg(accel);
+
+	return result;
 }
 
 inv_error_t imu_dmpBegin(unsigned short features, unsigned short fifoRate)
@@ -676,9 +682,11 @@ void imu_computeEulerAngles(bool degrees)
 		pitch *= (180.0 / PI);
 		roll *= (180.0 / PI);
 		yaw *= (180.0 / PI);
-		if (pitch < 0) pitch = 360.0 + pitch;
-		if (roll < 0) roll = 360.0 + roll;
-		if (yaw < 0) yaw = 360.0 + yaw;
+
+		//Commented out below as we want angles in ± around 0
+//		if (pitch < 0) pitch = 360.0 + pitch;
+//		if (roll < 0) roll = 360.0 + roll;
+//		if (yaw < 0) yaw = 360.0 + yaw;
 	}
 }
 
