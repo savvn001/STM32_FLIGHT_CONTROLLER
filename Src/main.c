@@ -28,7 +28,7 @@
 /* USER CODE BEGIN Includes */
 
 #include "../Drivers/IMU.h"
-#include "../Drivers/MPU9250_DMP.h"
+#include "../Drivers/SparkfunMPU9250-DMP.h"
 #include "../Drivers/PID.h"
 #include "../Drivers/GPS.h"
 #include <stdbool.h>
@@ -93,10 +93,23 @@ int esc4_total = 0;
 bool getRPY_flag = 0;
 
 /* IMU reading variables */
-float imu_roll;
-float imu_pitch;
-float imu_yaw;
-float imu_heading;
+float roll;
+float pitch;
+float yaw;
+float heading;
+
+float magX;
+float magY;
+float magZ;
+
+float gyroX;
+float gyroY;
+float gyroZ;
+
+float accelX;
+float accelY;
+float accelZ;
+
 /* PID */
 float roll_setpoint = 0;
 float pitch_setpoint = 0;
@@ -262,8 +275,8 @@ int main(void)
 	//Start timer 11 in interrupt mode, used for integral calculations
 	HAL_TIM_Base_Start(&htim11);
 
-	if (imu_init(&hi2c2) == IMU_SUCCESS) {
-		imu_calibrate();
+	if (init(&hi2c2) == IMU_SUCCESS) {
+		calibrate();
 	}
 
 	for (int i = 0; i < 31; ++i) {
@@ -281,7 +294,7 @@ int main(void)
 	//Check device communication is ok then begin
 	if (HAL_I2C_IsDeviceReady(&hi2c2, 0xD0, 2, 100) == HAL_OK) {
 
-		if (imu_begin() != INV_SUCCESS) {
+		if (begin() != INV_SUCCESS) {
 			while (1) {
 			// Failed to initialize MPU-9250, loop forever
 			}
@@ -290,40 +303,41 @@ int main(void)
 		}
 	}
 
+	// Enable all sensors
+	if ((setSensors(INV_XYZ_GYRO | INV_XYZ_ACCEL | INV_XYZ_COMPASS))){
+		while(1);
+	}
 
-	///////////////////////////// Init DMP /////////////////////////
-	imu_dmpBegin(DMP_FEATURE_6X_LP_QUAT,
-	              200);                         // Set update rate to 10Hz.
 
-	// Use setSensors to turn on or off MPU-9250 sensors.
-	// Any of the following defines can be combined:
-	// INV_XYZ_GYRO, INV_XYZ_ACCEL, INV_XYZ_COMPASS,
-	// INV_X_GYRO, INV_Y_GYRO, or INV_Z_GYRO
-	imu_setSensors(INV_XYZ_GYRO | INV_XYZ_ACCEL | INV_XYZ_COMPASS); // Enable all sensors
+////	///////////////////////////// Init DMP /////////////////////////
+//    dmpBegin(DMP_FEATURE_SEND_RAW_ACCEL | // Send accelerometer data
+//                 DMP_FEATURE_SEND_CAL_GYRO  | // Send calibrated gyro data
+//                 DMP_FEATURE_6X_LP_QUAT     , // Calculate quat's with accel/gyro
+//                 200);                         // Set update rate to 10Hz.
 
 
 	// Use setGyroFSR() and setAccelFSR() to configure the
 	// gyroscope and accelerometer full scale ranges.
 	// Gyro options are +/- 250, 500, 1000, or 2000 dps
-	imu_setGyroFSR(2000); // Set gyro to 2000 dps
+	setGyroFSR(2000); // Set gyro to 2000 dps
 	// Accel options are +/- 2, 4, 8, or 16 g
-	imu_setAccelFSR(2); // Set accel to +/-2g
+	setAccelFSR(2); // Set accel to +/-2g
 
 
 	// setLPF() can be used to set the digital low-pass filter
 	// of the accelerometer and gyroscope.
 	// Can be any of the following: 188, 98, 42, 20, 10, 5
 	// (values are in Hz).
-	imu_setLPF(42); // Set LPF corner frequency to 42Hz
+	setLPF(5); // Set LPF corner frequency to 42Hz
 
 	// The sample rate of the accel/gyro can be set using
 	// setSampleRate. Acceptable values range from 4Hz to 1kHz
-	imu_setSampleRate(1000); // Set sample rate to max
+	setSampleRate(1000); // Set sample rate to max
 
-	// Likewise, the compass (magnetometer) sample rate can be
+	// Likewise, the compass (accelnetometer) sample rate can be
 	// set using the setCompassSampleRate() function.
 	// This value can range between: 1-100Hz
-	imu_setCompassSampleRate(100); // Set mag rate to max
+	setCompassSampleRate(100); // Set accel rate to max
 
 
 	///////////////////////// IMU Calibration /////////////////////////
@@ -331,20 +345,17 @@ int main(void)
 	 * 	Will need to do this once with each new MPU9250 used.
 	 *	Essentially the process is:
 	 *
-	 *		- Run imu_selfTest(1) which should automatically work out what the biases need to be.
+	 *		- Run selfTest(1) which should automatically work out what the biases need to be.
 	 *		  Using the debugger note down the values stored into the gyro[3], accel[3] arrays.
 	 *
 	 *
 	 *
 	 */
 
-//
-//	//Result of 0x07 = all sensors working
-//	if (imu_selfTest(0) != 0x07) {
-//		while (1);
-//	}
-
-
+	//Result of 0x07 = all sensors working
+	if (selfTest(0) != 0x07) {
+		while (1);
+	}
 
 
 
@@ -940,58 +951,75 @@ void pulse_posedge_handler() {
 		tim11_count = htim11.Instance->CNT; //read TIM11 counter value, used for integral calculations
 		calc_RollPitchYaw(tim11_count);
 
-		imu_pitch = get_pitch();
-		imu_roll = get_roll();
-		imu_yaw = get_yaw();
+		pitch = get_pitch();
+		roll = get_roll();
+		yaw = get_yaw();
 #endif
 
 #if IMU_DMP
+//
+//		// Check for new data in the FIFO
+//		  if ( fifoAvailable() )
+//		  {
+//		    // Use dmpUpdateFifo to update the ax, gx, mx, etc. values
+//		    if ( dmpUpdateFifo() == INV_SUCCESS)
+//		    {
+//		      // computeEulerAngles can be used -- after updating the
+//		      // quaternion values -- to estimate roll, pitch, and yaw
+//		      computeEulerAngles(1);
+//		    }
+//		  }
 
-		// Check for new data in the FIFO
-		  if ( imu_fifoAvailable() )
-		  {
-		    // Use dmpUpdateFifo to update the ax, gx, mx, etc. values
-		    if ( imu_dmpUpdateFifo() == INV_SUCCESS)
-		    {
-		      // computeEulerAngles can be used -- after updating the
-		      // quaternion values -- to estimate roll, pitch, and yaw
-		      imu_computeEulerAngles(1);
-		    }
-		  }
 
-		imu_pitch = imu_get_pitch() + 0.0;
-		imu_roll = imu_get_roll() + 0;
-		imu_yaw = imu_get_yaw() + 0;
+		update(UPDATE_ACCEL | UPDATE_GYRO | UPDATE_COMPASS);
 
-		//Get compass heading
-		imu_updateCompass();
-		imu_heading = imu_computeCompassHeading();
+
+		 accelX = calcAccel(ax); // accelX is x-axis acceleration in g's
+		 accelY = calcAccel(ay); // accelY is y-axis acceleration in g's
+		 accelZ = calcAccel(az); // accelZ is z-axis acceleration in g's
+
+		 gyroX = calcGyro(gx); // gyroX is x-axis rotation in dps
+		 gyroY = calcGyro(gy); // gyroY is y-axis rotation in dps
+		 gyroZ = calcGyro(gz); // gyroZ is z-axis rotation in dps
+
+		 magX = calcMag(mx); // accelX is x-axis accelnetic field in uT
+		 magY = calcMag(my); // accelY is y-axis accelnetic field in uT
+		 magZ = calcMag(mz); // accelZ is z-axis accelnetic field in uT
+
+
+//		pitch = get_pitch() + 0.0;
+//		roll = get_roll() + 0;
+//		yaw = get_yaw() + 0;
+//
+//		//Get compass heading
+//		updateCompass();
+//		heading = computeCompassHeading();
 
 #endif
 		//Offset roll because IMU is upside down, comment out if not
 //		bool done = 0;
-//		if (imu_roll > 0 && !done) {
-//			imu_roll -= 180.0f;
+//		if (roll > 0 && !done) {
+//			roll -= 180.0f;
 //			done = 1;
 //		}
-//		if (imu_roll < 0 && !done) {
-//			imu_roll += 180.0f;
+//		if (roll < 0 && !done) {
+//			roll += 180.0f;
 //			done = 1;
 //		}
 
 		if (airmode) {
 
 			/*******    Pitch PID calculation  ********/
-			pid_output_pitch = pid_calculate_pitch(imu_pitch, 0,
+			pid_output_pitch = pid_calculate_pitch(pitch, 0,
 					pitch_setpoint);
 
 			/*******    Roll PID calculation  ********/
 
-			pid_output_roll = pid_calculate_roll(imu_roll, 0, roll_setpoint);
+			pid_output_roll = pid_calculate_roll(roll, 0, roll_setpoint);
 
 			/*******    Yaw PID calculation  ********/
 
-			//pid_output_yaw = pid_calculate_yaw(imu_yaw, tim11_count, yaw_setpoint);
+			//pid_output_yaw = pid_calculate_yaw(yaw, tim11_count, yaw_setpoint);
 		} else {
 			pid_output_roll = 0;
 			pid_output_pitch = 0;
@@ -1004,8 +1032,8 @@ void pulse_posedge_handler() {
 		/*** For tuning PID, store in buffer to print to PC later ***/
 #if PID_TUNE_DEBUG
 		if (print_buffer_index < SAMPLES) {
-			PID_print_buffer[print_buffer_index] = imu_roll;
-			IMU_print_buffer[print_buffer_index] = imu_roll;
+			PID_print_buffer[print_buffer_index] = roll;
+			IMU_print_buffer[print_buffer_index] = roll;
 
 			print_buffer_index++;
 		} else {
@@ -1159,17 +1187,17 @@ void packAckPayData_0() {
 	AckPayload_0[2] = batteryLevel >> 8;
 
 	//Next 4 bytes = IMU Roll
-	int16_t roll_tx = round(imu_roll * 100);
+	int16_t roll_tx = round(roll * 100);
 	AckPayload_0[3] = roll_tx;
 	AckPayload_0[4] = roll_tx >> 8;
 
 	//Next  4 bytes = IMU Pitch
-	int16_t pitch_tx = round(imu_pitch * 100);
+	int16_t pitch_tx = round(pitch * 100);
 	AckPayload_0[5] = pitch_tx;
 	AckPayload_0[6] = pitch_tx >> 8;
 
 	//Next  4 bytes = IMU Yaw
-	int16_t yaw_tx = round(imu_yaw * 100);
+	int16_t yaw_tx = round(yaw * 100);
 	AckPayload_0[5] = yaw_tx;
 	AckPayload_0[6] = yaw_tx >> 8;
 
