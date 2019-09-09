@@ -3,3 +3,4 @@ Open source flight controller running on an STM32F411RE MCU. Features user contr
 
 
 
+![Alt text](pic2.jpg?raw=true "Flight controller PCB")
