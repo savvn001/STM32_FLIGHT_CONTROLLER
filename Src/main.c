@@ -27,8 +27,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-#include "../Drivers/IMU.h"
-#include "../Drivers/SparkfunMPU9250-DMP.h"
+
+
 #include "../Drivers/PID.h"
 #include "../Drivers/GPS.h"
 #include <stdbool.h>
@@ -36,6 +36,7 @@
 #include "arm_math.h"
 #include "../Drivers/MY_NRF24.h"
 #include "../Drivers/dwt_delay.h"
+#include "../Drivers/MPU9250.h"
 
 /* USER CODE END Includes */
 
@@ -172,10 +173,10 @@ int print_buffer_index = 0;
 
 //Enable ONLY 1 of the two below
 //1 if using IMU (Kris winer MBED Library, fusion algorithm on MCU)
-#define IMU 0
+#define IMU 1
 
 //1 if using MPU9250 with Ivense Motion Driver Library and DMP
-#define IMU_DMP 1 //DMP offloads fusion
+#define IMU_DMP 0 //DMP offloads fusion
 
 
 /* USER CODE END PV */
@@ -270,96 +271,9 @@ int main(void)
 	/////////////////////////////////////////////////////////////////
 	////////////////////// Init MPU9250 IMU /////////////////////////
 	/////////////////////////////////////////////////////////////////
-#if IMU
-
-	//Start timer 11 in interrupt mode, used for integral calculations
-	HAL_TIM_Base_Start(&htim11);
-
-	if (init(&hi2c2) == IMU_SUCCESS) {
-		calibrate();
-	}
-
-	for (int i = 0; i < 31; ++i) {
-		AckPayload_0[i] = 0;
-		AckPayload_1[i] = 0;
-
-	}
-#endif
-
-
-#if IMU_DMP
-
-	/***** Init using Sparkfun DMP library (ported to this platform) ****/
-
-	//Check device communication is ok then begin
-	if (HAL_I2C_IsDeviceReady(&hi2c2, 0xD0, 2, 100) == HAL_OK) {
-
-		if (begin() != INV_SUCCESS) {
-			while (1) {
-			// Failed to initialize MPU-9250, loop forever
-			}
-		} else {
-			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5); //Toggle LED on if so
-		}
-	}
-
-	// Enable all sensors
-	if ((setSensors(INV_XYZ_GYRO | INV_XYZ_ACCEL | INV_XYZ_COMPASS))){
-		while(1);
-	}
-
-
-////	///////////////////////////// Init DMP /////////////////////////
-//    dmpBegin(DMP_FEATURE_SEND_RAW_ACCEL | // Send accelerometer data
-//                 DMP_FEATURE_SEND_CAL_GYRO  | // Send calibrated gyro data
-//                 DMP_FEATURE_6X_LP_QUAT     , // Calculate quat's with accel/gyro
-//                 200);                         // Set update rate to 10Hz.
-
-
-	// Use setGyroFSR() and setAccelFSR() to configure the
-	// gyroscope and accelerometer full scale ranges.
-	// Gyro options are +/- 250, 500, 1000, or 2000 dps
-	setGyroFSR(2000); // Set gyro to 2000 dps
-	// Accel options are +/- 2, 4, 8, or 16 g
-	setAccelFSR(2); // Set accel to +/-2g
-
-
-	// setLPF() can be used to set the digital low-pass filter
-	// of the accelerometer and gyroscope.
-	// Can be any of the following: 188, 98, 42, 20, 10, 5
-	// (values are in Hz).
-	setLPF(5); // Set LPF corner frequency to 42Hz
-
-	// The sample rate of the accel/gyro can be set using
-	// setSampleRate. Acceptable values range from 4Hz to 1kHz
-	setSampleRate(1000); // Set sample rate to max
-
-	// Likewise, the compass (accelnetometer) sample rate can be
-	// set using the setCompassSampleRate() function.
-	// This value can range between: 1-100Hz
-	setCompassSampleRate(100); // Set accel rate to max
-
-
-	///////////////////////// IMU Calibration /////////////////////////
-	/*
-	 * 	Will need to do this once with each new MPU9250 used.
-	 *	Essentially the process is:
-	 *
-	 *		- Run selfTest(1) which should automatically work out what the biases need to be.
-	 *		  Using the debugger note down the values stored into the gyro[3], accel[3] arrays.
-	 *
-	 *
-	 *
-	 */
-
-	//Result of 0x07 = all sensors working
-	if (selfTest(0) != 0x07) {
-		while (1);
-	}
 
 
 
-#endif
 
 
 	/////////////////////////////////////////////////////////////////
@@ -863,6 +777,8 @@ void PWM4_Set(uint16_t value) {
 	htim4.Instance->CCR4 = value;
 }
 
+int divider = 0;
+
 /* ------------------------------ MAIN CONTROL LOOP --------------------------------------
  *
  * Calculate the required pulse widths to set individual motor speeds based off of IMU
@@ -947,55 +863,19 @@ void pulse_posedge_handler() {
 #endif
 
 #if IMU
-		//Calculate roll, pitch & yaw using IMU readings
+
 		tim11_count = htim11.Instance->CNT; //read TIM11 counter value, used for integral calculations
-		calc_RollPitchYaw(tim11_count);
 
-		pitch = get_pitch();
-		roll = get_roll();
-		yaw = get_yaw();
-#endif
-
-#if IMU_DMP
-//
-//		// Check for new data in the FIFO
-//		  if ( fifoAvailable() )
-//		  {
-//		    // Use dmpUpdateFifo to update the ax, gx, mx, etc. values
-//		    if ( dmpUpdateFifo() == INV_SUCCESS)
-//		    {
-//		      // computeEulerAngles can be used -- after updating the
-//		      // quaternion values -- to estimate roll, pitch, and yaw
-//		      computeEulerAngles(1);
-//		    }
-//		  }
-
-
-		update(UPDATE_ACCEL | UPDATE_GYRO | UPDATE_COMPASS);
-
-
-		 accelX = calcAccel(ax); // accelX is x-axis acceleration in g's
-		 accelY = calcAccel(ay); // accelY is y-axis acceleration in g's
-		 accelZ = calcAccel(az); // accelZ is z-axis acceleration in g's
-
-		 gyroX = calcGyro(gx); // gyroX is x-axis rotation in dps
-		 gyroY = calcGyro(gy); // gyroY is y-axis rotation in dps
-		 gyroZ = calcGyro(gz); // gyroZ is z-axis rotation in dps
-
-		 magX = calcMag(mx); // accelX is x-axis accelnetic field in uT
-		 magY = calcMag(my); // accelY is y-axis accelnetic field in uT
-		 magZ = calcMag(mz); // accelZ is z-axis accelnetic field in uT
-
-
-//		pitch = get_pitch() + 0.0;
-//		roll = get_roll() + 0;
-//		yaw = get_yaw() + 0;
-//
-//		//Get compass heading
-//		updateCompass();
-//		heading = computeCompassHeading();
+		//if(divider == 4){
+		calculate_euler(tim11_count);
+//		divider = 0;
+//		}
+//		else{
+//			divider++;
+//		}
 
 #endif
+
 		//Offset roll because IMU is upside down, comment out if not
 //		bool done = 0;
 //		if (roll > 0 && !done) {
@@ -1085,10 +965,6 @@ void pulse_posedge_handler() {
 
 	}
 
-}
-
-float map(int x, int in_min, int in_max, int out_min, int out_max) {
-	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
 /*

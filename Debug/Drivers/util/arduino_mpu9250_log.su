@@ -1,4 +1,0 @@
-arduino_mpu9250_log.c:30:6:logString	0	static
-arduino_mpu9250_log.c:34:5:_MLPrintLog	0	static
-arduino_mpu9250_log.c:38:6:eMPL_send_quat	0	static
-arduino_mpu9250_log.c:42:6:eMPL_send_data	0	static
