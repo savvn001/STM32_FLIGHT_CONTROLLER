@@ -1,5 +1,11 @@
 # STM32_FLIGHT_CONTROLLER
-Open source flight controller running on an STM32F411RE MCU and a custom designed PCB. Project written in STM32cubeIDE. The controller communicates with another custom designed controller thorugh NRF24L01 modules. GPS is provided by a uBlox NEO6M GPS module, and orientation from an MPU9250 9-axis IMU.
+Open source flight controller running on an STM32F411RE MCU and a custom designed PCB. Project written in STM32cubeIDE. 
+
+The other modules this flight controller currently uses:
+
+- NRF24L01PA for RF comms
+- GPS is provided by a uBlox NEO6M GPS module
+- Orientation from an MPU9250 9-axis IMU.
 
 Current features:
 - User control
