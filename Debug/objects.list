@@ -1,5 +1,5 @@
 "Drivers/GPS.o"
-"Drivers/MPU9250.o"
+"Drivers/IMU.o"
 "Drivers/MY_NRF24.o"
 "Drivers/PID.o"
 "Drivers/dwt_delay.o"

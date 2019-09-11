@@ -29,7 +29,7 @@ float pitch_d_gain = 0.25; //0.25
 
 
 
-/********************** roll Axis PID control variables *****************************/
+/********************** Roll Axis PID control variables *****************************/
 
 
 

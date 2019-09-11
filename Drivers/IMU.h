@@ -1,31 +1,30 @@
-/* 06/16/2017 Copyright Tlera Corporation
+/*
+ * IMU.h
  *
- *  Created by Kris Winer
- *
- Demonstrate basic MPU-9250 functionality including parameterizing the register addresses, initializing the sensor,
- getting properly scaled accelerometer, gyroscope, and magnetometer data out.
- Addition of 9 DoF sensor fusion using open source Madgwick filter algorithm.
- Sketch runs on the 3.3 V Ladybug STM32L432 Breakout Board.
-
- Library may be used freely and without limit with attribution.
-
+ *  Created on: Jun 19, 2019
+ *      Author: nick_savva
  */
 
-#ifndef MPU9250_h
-#define MPU9250_h
+#ifndef IMU_H_
+#define IMU_H_
 
 
-#include <stdbool.h>
 #include <stdio.h>
+#include "math.h"
 
 
+#define MPU9250_ADDRESS_TX 0xD0 //NICK - These include R/W bit on ends
+#define MPU9250_ADDRESS_RX 0xD1
+
+#define AK8963_ADDRESS_TX 0x18
+#define AK8963_ADDRESS_RX 0x19
 
 
 // See also MPU-9250 Register Map and Descriptions, Revision 4.0, RM-MPU-9250A-00, Rev. 1.4, 9/9/2013 for registers not listed in
 // above document; the MPU9250 and MPU9150 are virtually identical but the latter has a different register map
 //
 //Magnetometer Registers
-#define AK8963_ADDRESS   0x0C
+#define AK8963_ADDRESS   0x0C<<1
 #define WHO_AM_I_AK8963  0x00 // should return 0x48
 #define INFO             0x01
 #define AK8963_ST1       0x02  // data ready status bit 0
@@ -37,7 +36,6 @@
 #define AK8963_ZOUT_H    0x08
 #define AK8963_ST2       0x09  // Data overflow bit 3 and data read error status bit 2
 #define AK8963_CNTL      0x0A  // Power down (0000), single-measurement (0001), self-test (1000) and Fuse ROM (1111) modes on bits 3:0
-#define AK8963_CNTL2     0x0B  // Reset
 #define AK8963_ASTC      0x0C  // Self test control
 #define AK8963_I2CDIS    0x0F  // I2C disable
 #define AK8963_ASAX      0x10  // Fuse ROM x-axis sensitivity adjustment value
@@ -171,81 +169,75 @@
 #define ZA_OFFSET_H      0x7D
 #define ZA_OFFSET_L      0x7E
 
-// Set initial input parameters
-#define  AFS_2G  0
-#define  AFS_4G  1
-#define  AFS_8G  2
-#define  AFS_16G 3
+typedef enum {
 
-#define  GFS_250DPS  0
-#define  GFS_500DPS  1
-#define  GFS_1000DPS 2
-#define  GFS_2000DPS 3
+	IMU_SUCCESS = 0x00, IMU_FAIL = 0x01,
 
-#define  MFS_14BITS  0 // 0.6 mG per LSB
-#define  MFS_16BITS  1    // 0.15 mG per LSB
+} IMU_StatusTypeDef;
 
-#define M_8Hz   0x02
-#define M_100Hz 0x06
+/***************************** METHODS  **********************************/
 
-// Define I2C addresses of the two MPU9250
-#define MPU9250_1_ADDRESS 0x68   // Device address when ADO = 0
-#define MPU1              0x68
-#define MPU9250_2_ADDRESS 0x69   // Device address when ADO = 1
-#define MPU2              0x69
-#define AK8963_ADDRESS    0x0C   //  Address of magnetometer
+IMU_StatusTypeDef imu_init();
 
-//MPU9250(uint8_t intPin);
-uint8_t getMPU9250ID(uint8_t MPUnum);
-uint8_t getAK8963CID(uint8_t MPUnum);
-void resetMPU9250(uint8_t MPUnum);
-void initMPU9250(uint8_t MPUnum, uint8_t Ascale, uint8_t Gscale,
-		uint8_t sampleRate);
-void initAK8963Slave(uint8_t MPUnum, uint8_t Mscale, uint8_t Mmode,
-		float * destination);
-float getAres(uint8_t Ascale);
-float getGres(uint8_t Gscale);
-float getMres(uint8_t Mscale);
-void magcalMPU9250(uint8_t MPUnum, float * dest1, float * dest2);
-void calibrateMPU9250(uint8_t MPUnum, float * dest1, float * dest2);
-void SelfTest(uint8_t MPUnum, float * destination);
-void readMPU9250Data(uint8_t MPUnum, int16_t * destination);
-void readAccelData(uint8_t MPUnum, int16_t * destination);
-void readGyroData(uint8_t MPUnum, int16_t * destination);
-bool checkNewAccelGyroData(uint8_t MPUnum);
-bool checkNewMagData(uint8_t MPUnum);
-void readMagData(uint8_t MPUnum, int16_t * destination);
-int16_t readGyroTempData(uint8_t MPUnum);
-void gyromagSleep(uint8_t MPUnum);
-void gyromagWake(uint8_t MPUnum, uint8_t Mmode);
-void accelWakeOnMotion(uint8_t MPUnum);
-bool checkWakeOnMotion(uint8_t MPUnum);
-//  void MadgwickQuaternionUpdate(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz);
-void writeByte(uint8_t address, uint8_t subAddress, uint8_t data);
-uint8_t readByte(uint8_t address, uint8_t subAddress);
-void readBytes(uint8_t address, uint8_t subAddress, uint8_t count,
-		uint8_t * dest);
+IMU_StatusTypeDef imu_calibrate();
 
-uint8_t _intPin;
-float _aRes;
-float _gRes;
-float _mRes;
-uint8_t _Mmode;
+void calc_RollPitchYaw(int counter_value);
 
+void printftest();
+/*
+ *	Some functions to allow the program to use printf,
+ *	adapted from http://www.emcu.eu/how-to-implement-printf-for-send-message-via-usb-on-stm32-nucleo-boards-using-atollic/
+ *
+ */
+int __io_putchar(int ch);
 
+int _write(int file, char *ptr, int len);
+void timer_reset();
+//===================================================================================================================
+//====== Set of useful function to access acceleration, gyroscope, and temperature data
+//===================================================================================================================
+
+void writeByte(uint8_t address_tx, uint8_t subAddress, uint8_t data);
+
+char readByte(uint8_t address_tx, uint8_t address_rx, uint8_t subAddress) ;
+
+void readBytes(uint8_t address_tx, uint8_t address_rx, uint8_t subAddress,
+	uint8_t count, uint8_t * dest);
+
+void getMres();
+
+void getGres();
+
+void getAres();
+void readAccelData(int16_t * destination);
+
+void readGyroData(int16_t * destination);
+void readMagData(int16_t * destination);
+int16_t readTempData();
+
+void resetMPU9250();
+void initAK8963(float * destination);
+void magcalMPU9250(float * dest1, float * dest2);
+void initMPU9250();
+
+float get_roll();
+float get_pitch();
+float get_yaw();
+// Function which accumulates gyro and accelerometer data after device initialization. It calculates the average
+// of the at-rest readings and then loads the resulting offsets into accelerometer and gyro bias registers.
+void calibrateMPU9250(float * dest1, float * dest2);
+
+// Accelerometer and gyroscope self test; check calibration wrt factory settings
+void MPU9250SelfTest(float * destination); // Should return percent deviation from factory trim values, +/- 14 or less deviation is a pass
 
 
+void MadgwickQuaternionUpdate(float ax, float ay, float az, float gx, float gy,
+		float gz, float mx, float my, float mz);
 
-//////////////// MY functions/////////////////////////////////
-
-void imu_init();
-void calculate_euler(int tim_counter_value);
-
-
-
-
+// Similar to Madgwick scheme but uses proportional and integral filtering on the error between estimated reference vectors and
+// measured ones.
+void MahonyQuaternionUpdate(float ax, float ay, float az, float gx, float gy,
+		float gz, float mx, float my, float mz);
 
 
-
-
-#endif
+#endif /* IMU_H_ */

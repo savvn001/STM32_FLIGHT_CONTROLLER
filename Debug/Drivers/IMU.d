@@ -1,4 +1,4 @@
-Drivers/MPU9250.o: ../Drivers/MPU9250.c ../Drivers/MPU9250.h \
+Drivers/IMU.o: ../Drivers/IMU.c ../Drivers/IMU.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h \
  ../Inc/stm32f4xx_hal_conf.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rcc.h \
@@ -34,7 +34,7 @@ Drivers/MPU9250.o: ../Drivers/MPU9250.c ../Drivers/MPU9250.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
  ../Inc/arm_math.h ../Drivers/CMSIS/Include/cmsis_compiler.h
 
-../Drivers/MPU9250.h:
+../Drivers/IMU.h:
 
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
 
