@@ -70,7 +70,8 @@ float q[4] = { 1.0f, 0.0f, 0.0f, 0.0f };           // vector to hold quaternion
 float eInt[3] = { 0.0f, 0.0f, 0.0f }; // vector to hold integral error for Mahony method
 
 
-
+bool I2cTxCplt = 0;
+bool I2cRxCplt = 0;
 
 /***************************** METHODS  **********************************/
 
@@ -276,8 +277,16 @@ void writeByte(uint8_t address_tx, uint8_t subAddress, uint8_t data) {
 	data_write[1] = data;
 	//i2c.write(address, data_write, 2, 0);
 
+	//Blocking
+	//HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 2, 10);
 
-	HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 2, 10);
+	//Non blocking - DMA
+	I2cTxCplt = 0;
+	HAL_I2C_Master_Transmit_DMA(&hi2c2, address_tx, data_write, 2);
+	while(!I2cTxCplt){
+
+	}
+
 }
 
 //NICK - I've changed these to accept a tx address & a rx address as STM32 boards include the R/W bit at the end of 7 bit adress
@@ -289,27 +298,55 @@ char readByte(uint8_t address_tx, uint8_t address_rx, uint8_t subAddress) {
 	//i2c.write(address, data_write, 1, 1); // no stop
 	//i2c.read(address, data, 1, 0);
 
+	//Blocking
+//	HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 1, 10); //Send adress of register ONLY
+//	HAL_I2C_Master_Receive(&hi2c2, address_tx, data, 1, 10);
 
-	HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 1, 10); //Send adress of register ONLY
-	HAL_I2C_Master_Receive(&hi2c2, address_tx, data, 1, 10);
+
+	//Non blocking - DMA
+	I2cTxCplt = 0;
+	HAL_I2C_Master_Transmit_DMA(&hi2c2, address_tx, data_write, 1);
+	while(!I2cTxCplt){
+	}
+
+	I2cRxCplt = 0;
+	HAL_I2C_Master_Receive_DMA(&hi2c2, address_tx, data, 1);
+	while(!I2cRxCplt){
+	}
+
+
+
 
 	return data[0];
 }
 
 void readBytes(uint8_t address_tx, uint8_t address_rx, uint8_t subAddress,
 	uint8_t count, uint8_t * dest) {
+
+
 	uint8_t data[14];
 	uint8_t data_write[1];
 	data_write[0] = subAddress;
 	//i2c.write(address, data_write, 1, 1); // no stop
 	//i2c.read(address, data, count, 0);
 
+	//Blocking
+//	HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 1, 10);
+//	HAL_I2C_Master_Receive(&hi2c2, address_rx, data, count, 10);
 
-	HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 1, 10);
-	HAL_I2C_Master_Receive(&hi2c2, address_rx, data, count, 10);
+//	for (int ii = 0; ii < count; ii++) {
+//		dest[ii] = data[ii];
+//	}
 
-	for (int ii = 0; ii < count; ii++) {
-		dest[ii] = data[ii];
+	//Non blocking - DMA
+	I2cTxCplt = 0;
+	HAL_I2C_Master_Transmit_DMA(&hi2c2, address_tx, data_write, 1);
+	while(!I2cTxCplt){
+	}
+
+	I2cRxCplt = 0;
+	HAL_I2C_Master_Receive_DMA(&hi2c2, address_tx, dest, count);
+	while(!I2cRxCplt){
 	}
 }
 
@@ -1020,5 +1057,19 @@ __attribute__((optimize("Ofast"))) void MahonyQuaternionUpdate(float ax, float a
 	q[1] = q2 * norm;
 	q[2] = q3 * norm;
 	q[3] = q4 * norm;
+
+}
+
+
+
+void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c){
+
+	I2cTxCplt = 1;
+
+}
+
+void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c){
+
+	I2cRxCplt = 1;
 
 }
