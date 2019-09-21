@@ -1,4 +1,7 @@
 # STM32_FLIGHT_CONTROLLER
+
+(Still undergoing active development)
+
 Open source flight controller running on an STM32F411RE MCU and a custom designed PCB. Project written in STM32cubeIDE. 
 
 The other modules this flight controller currently uses:
