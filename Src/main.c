@@ -23,12 +23,15 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
 #include "../Drivers/PID.h"
 #include "../Drivers/GPS.h"
+
+#include "../Drivers/bno055_top.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include "arm_math.h"
@@ -70,9 +73,9 @@
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
 
+CRC_HandleTypeDef hcrc;
+
 I2C_HandleTypeDef hi2c2;
-DMA_HandleTypeDef hdma_i2c2_rx;
-DMA_HandleTypeDef hdma_i2c2_tx;
 
 SPI_HandleTypeDef hspi2;
 
@@ -82,7 +85,11 @@ TIM_HandleTypeDef htim11;
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart6;
 
+osThreadId ControlLoopHandle;
 /* USER CODE BEGIN PV */
+
+
+
 
 int throttle = 0;
 
@@ -150,10 +157,10 @@ int print_buffer_index = 0;
 #define MOTORS 1
 
 //1 if NRF24 module connected
-#define NRF24 0
+#define NRF24 1
 
 //1 if using battery
-#define BATTERY 1
+#define BATTERY 0
 
 //1 if using GPS module
 #define GPS 0
@@ -162,22 +169,21 @@ int print_buffer_index = 0;
 //1 if using IMU (Kris winer MBED Library, fusion algorithm on MCU)
 #define IMU 1
 
-//1 if using MPU9250 with Ivense Motion Driver Library and DMP
-#define IMU_DMP 0 //DMP offloads fusion
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_USART6_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_SPI2_Init(void);
+static void MX_CRC_Init(void);
 static void MX_TIM11_Init(void);
+void StartControlLoop(void const * argument);
+
 /* USER CODE BEGIN PFP */
 
 void ARM_ESCs();
@@ -188,7 +194,7 @@ void PWM2_Set(uint16_t value);
 void PWM3_Set(uint16_t value);
 void PWM4_Set(uint16_t value);
 
-void pulse_posedge_handler();
+void controlLoop();
 
 void print_data_to_pc();
 void update_PID_values();
@@ -225,7 +231,7 @@ uint16_t packetsLostCtr = 0;
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+	//struct Adafruit_BNO055* c = newAdafruit_BNO055();
   /* USER CODE END 1 */
   
 
@@ -247,13 +253,13 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_I2C2_Init();
   MX_TIM4_Init();
   MX_USART6_UART_Init();
   MX_ADC1_Init();
   MX_SPI2_Init();
+  MX_CRC_Init();
   MX_TIM11_Init();
   /* USER CODE BEGIN 2 */
 
@@ -276,6 +282,10 @@ int main(void)
 
 	}
 #endif
+
+
+
+
 
 
 
@@ -331,6 +341,36 @@ int main(void)
 	PWM4_Set(2500);
 
   /* USER CODE END 2 */
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* definition and creation of ControlLoop */
+  osThreadDef(ControlLoop, StartControlLoop, osPriorityRealtime, 0, 256);
+  ControlLoopHandle = osThreadCreate(osThread(ControlLoop), NULL);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* Start scheduler */
+  osKernelStart();
+  
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -435,6 +475,32 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief CRC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_CRC_Init(void)
+{
+
+  /* USER CODE BEGIN CRC_Init 0 */
+
+  /* USER CODE END CRC_Init 0 */
+
+  /* USER CODE BEGIN CRC_Init 1 */
+
+  /* USER CODE END CRC_Init 1 */
+  hcrc.Instance = CRC;
+  if (HAL_CRC_Init(&hcrc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN CRC_Init 2 */
+
+  /* USER CODE END CRC_Init 2 */
 
 }
 
@@ -587,9 +653,9 @@ static void MX_TIM11_Init(void)
 
   /* USER CODE END TIM11_Init 1 */
   htim11.Instance = TIM11;
-  htim11.Init.Prescaler = 100-1;
+  htim11.Init.Prescaler = 100;
   htim11.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim11.Init.Period = 65535-1;
+  htim11.Init.Period = 65535;
   htim11.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim11.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim11) != HAL_OK)
@@ -668,24 +734,6 @@ static void MX_USART6_UART_Init(void)
 
 }
 
-/** 
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void) 
-{
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Stream2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream2_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream2_IRQn);
-  /* DMA1_Stream7_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream7_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream7_IRQn);
-
-}
-
 /**
   * @brief GPIO Initialization Function
   * @param None
@@ -741,13 +789,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(PWM_RE_INT_GPIO_Port, &GPIO_InitStruct);
-
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI4_IRQn);
-
-  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 4, 0);
-  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
 }
 
@@ -816,10 +857,8 @@ int divider = 0;
  * This function gets called by the GPIO_EXTI callback when the PWM_RE_INT_Pin triggers an interrupt,
  * which is on the rising edge of every PWM pulse.
  */
-void pulse_posedge_handler() {
+void controlLoop(){
 
-	//Only want this to happen in main loop - not during init sequence
-	if (main_loop) {
 
 #if NRF24
 		//Pack acknowledge data 0 - sent every control loop
@@ -844,10 +883,8 @@ void pulse_posedge_handler() {
 			//Write the acknowledge payload back to the transmitter/controller
 			if (loop_counter == CRTL_LOOP_FREQ - 1) {
 				NRF24_writeAckPayload(1, AckPayload_1, 32);
-
 			} else {
 				NRF24_writeAckPayload(1, AckPayload_0, 32);
-
 			}
 			//Unpack the 32 byte payload from controller
 			unpackRxData();
@@ -876,7 +913,7 @@ void pulse_posedge_handler() {
 		}
 
 		if (packetsLostCtr > 10) {
-			lostConnection();
+			//lostConnection();
 		}
 
 #endif
@@ -887,7 +924,7 @@ void pulse_posedge_handler() {
 
 		int tim1 = tim11_count;
 
-		calc_RollPitchYaw(tim11_count);
+		calc_RollPitchYaw(tim11_count, &imu_roll, &imu_pitch, &imu_yaw);
 
 
 		tim11_count = htim11.Instance->CNT; //read TIM11 counter value, used for integral calculations
@@ -895,23 +932,8 @@ void pulse_posedge_handler() {
 
 		volatile int deltat = tim2-tim1;
 
-
-		imu_pitch = get_pitch();
-		imu_roll = get_roll();
-		imu_yaw = get_yaw();
-
-
-		//Offset roll because IMU is upside down, comment out if not
-		bool done = 0;
-		if (imu_yaw > 0 && !done) {
-			imu_yaw -= 180.0f;
-			done = 1;
-		}
-		if (imu_yaw < 0 && !done) {
-			imu_yaw += 180.0f;
-			done = 1;
-		}
 #endif
+
 		if (airmode) {
 			/*******    Pitch PID calculation  ********/
 			pid_output_pitch = pid_calculate_pitch(imu_pitch, 0, 0);
@@ -986,7 +1008,6 @@ void pulse_posedge_handler() {
 
 #endif
 
-	}
 
 }
 
@@ -1030,21 +1051,21 @@ void printToPC() {
 #endif
 }
 
-//GPIO interrupt callback
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-
-//GPIO pin configured to capture rising edge interrupt of PWM signals
-	if (GPIO_Pin == PWM_RE_INT_Pin && main_loop) {
-		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
-		pulse_posedge_handler();
-		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
-	}
-
-	if (GPIO_Pin == kill_Pin && main_loop) {
-		//kill();
-	}
-
-}
+////GPIO interrupt callback
+//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+//
+////GPIO pin configured to capture rising edge interrupt of PWM signals
+//	if (GPIO_Pin == PWM_RE_INT_Pin && main_loop) {
+//		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
+//		pulse_posedge_handler();
+//		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
+//	}
+//
+//	if (GPIO_Pin == kill_Pin && main_loop) {
+//		//kill();
+//	}
+//
+//}
 
 // Unpack received 32 byte payload from transmitter, see documentation for specification details
 void unpackRxData() {
@@ -1231,6 +1252,11 @@ void resetNRF24() {
 
 }
 
+float map(int x, int in_min, int in_max, int out_min, int out_max) {
+	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+
 #if BATTERY
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 
@@ -1254,6 +1280,49 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 
 #endif
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_StartControlLoop */
+/**
+  * @brief  Function implementing the ControlLoop thread.
+  * @param  argument: Not used 
+  * @retval None
+  */
+/* USER CODE END Header_StartControlLoop */
+void StartControlLoop(void const * argument)
+{
+
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for(;;)
+  {
+	controlLoop();
+
+	//Delay 2ms = 500Hz update rate
+    osDelay(2);
+  }
+  /* USER CODE END 5 */ 
+}
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM3 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM3) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.

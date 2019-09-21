@@ -38,14 +38,14 @@ uint8_t Mscale = MFS_16BITS; // MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magne
 uint8_t Mmode = 0x06; // Either 8 Hz 0x02) or 100 Hz (0x06) magnetometer data ODR
 float aRes, gRes, mRes;      // scale resolutions per LSB for the sensors
 
-
+// Pin definitions
+int intPin = 12;  // These can be changed, 2 and 3 are the Arduinos ext int pins
 
 int16_t accelCount[3];  // Stores the 16-bit signed accelerometer sensor output
 int16_t gyroCount[3];   // Stores the 16-bit signed gyro sensor output
 int16_t magCount[3];    // Stores the 16-bit signed magnetometer sensor output
 float magCalibration[3] = { 0, 0, 0 }, magbias[3] = { 0, 0, 0 }; // Factory mag calibration and mag bias
-float gyroBias[3] = { 0, 0, 0. }, accelBias[3] = { 0, 0., 0.}; // Bias corrections for gyro and accelerometer
-float magScale[3] = {1,1,1};
+float gyroBias[3] = {0,0,0 }, accelBias[3] = { 0,0,0}; // Bias corrections for gyro and accelerometer
 float ax, ay, az, gx, gy, gz, mx, my, mz; // variables to hold latest sensor data values
 int16_t tempCount; // Stores the real internal chip temperature in degrees Celsius
 float temperature;
@@ -70,8 +70,7 @@ float q[4] = { 1.0f, 0.0f, 0.0f, 0.0f };           // vector to hold quaternion
 float eInt[3] = { 0.0f, 0.0f, 0.0f }; // vector to hold integral error for Mahony method
 
 
-bool I2cTxCplt = 0;
-bool I2cRxCplt = 0;
+
 
 /***************************** METHODS  **********************************/
 
@@ -146,23 +145,15 @@ IMU_StatusTypeDef imu_calibrate() {
 	getGres(); // Get gyro sensitivity
 	getMres(); // Get magnetometer sensitivity
 
-
-	//magcalMPU9250(magbias, magScale);
-
-	magbias[0]	=	64.231575;
-	magbias[1]	=	-151.403;
-	magbias[2]	=	117.918869;
-
-	magScale[0]	=	0.698056817;
-	magScale[1]	=	1.17042613;
-	magScale[2]	=	1.4024024;
-
+	magbias[0] = +470.; // User environmental x-axis correction in milliGauss, should be automatically calculated
+	magbias[1] = +120.; // User environmental x-axis correction in milliGauss
+	magbias[2] = +125.; // User environmental x-axis correction in milliGauss
 
 	return IMU_SUCCESS;
 
 }
 
-void calc_RollPitchYaw(int counter_value) {
+void calc_RollPitchYaw(int counter_value, float *imu_roll, float *imu_pitch, float *imu_yaw) {
 
 	//******* Get roll pitch & yaw values from registers (also from library example but adapted slightly) ********
 
@@ -187,10 +178,6 @@ void calc_RollPitchYaw(int counter_value) {
 		mx = (float) magCount[0] * mRes * magCalibration[0] - magbias[0]; // get actual magnetometer value, this depends on scale being set
 		my = (float) magCount[1] * mRes * magCalibration[1] - magbias[1];
 		mz = (float) magCount[2] * mRes * magCalibration[2] - magbias[2];
-
-	      mx *= magScale[0];
-	      my *= magScale[1];
-	      mz *= magScale[2];
 	}
 
 	Now = counter_value;
@@ -200,11 +187,14 @@ void calc_RollPitchYaw(int counter_value) {
 	if(Now - lastUpdate < 0){
 		//Take time difference taking into account reset of timer
 		//Formula for getting timer count into seconds = COUNT * (1/TIMER_CLK)*PRESCALER
-		deltat = (float) (((65535-lastUpdate)+Now) * (1 / (TIMER_CLK_FREQ / 100.0f)));
+		deltat = (float) (((65534-lastUpdate)+Now) * (1 / (TIMER_CLK_FREQ / 99.0f)));
+
+
+
 	}
 	else{
 	//Otherwise normally the count difference will be positive
-	deltat = (float) ((Now - lastUpdate) * (1 / (TIMER_CLK_FREQ / 100.0f))); // set integration time by time elapsed since last filter update
+	deltat = (float) ((Now - lastUpdate) * (1 / (TIMER_CLK_FREQ / 99.0f))); // set integration time by time elapsed since last filter update
 
 	}
 
@@ -230,13 +220,18 @@ void calc_RollPitchYaw(int counter_value) {
 	yaw = atan2(2.0 * (q[1] * q[2] + q[0] * q[3]), q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]);
 	pitch = -asin(2.0 * (q[1] * q[3] - q[0] * q[2]));
 	roll = atan2(2.0 * (q[0] * q[1] + q[2] * q[3]), q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]);
-	pitch *= 180.0 / PI;
-	yaw *= 180.0 / PI;
-	yaw -=  -0.27; // CHANGE-> (In Leeds, UK declination = -1.1) ... Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04 (+13.8)
-	roll *= 180.0 / PI;
+	pitch *= 180.0f / PI;
+	yaw *= 180.0f / PI;
+	yaw -=  -1.1; // CHANGE-> (In Leeds, UK declination = -1.1) ... Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04 (+13.8)
+	roll *= 180.0f / PI;
 
 	sum = 0;
 	sumCount = 0;
+
+
+	*imu_roll = roll;
+	*imu_pitch = pitch;
+	*imu_yaw = yaw;
 
 }
 
@@ -277,16 +272,8 @@ void writeByte(uint8_t address_tx, uint8_t subAddress, uint8_t data) {
 	data_write[1] = data;
 	//i2c.write(address, data_write, 2, 0);
 
-	//Blocking
-	//HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 2, 10);
 
-	//Non blocking - DMA
-	I2cTxCplt = 0;
-	HAL_I2C_Master_Transmit_DMA(&hi2c2, address_tx, data_write, 2);
-	while(!I2cTxCplt){
-
-	}
-
+	HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 2, 10);
 }
 
 //NICK - I've changed these to accept a tx address & a rx address as STM32 boards include the R/W bit at the end of 7 bit adress
@@ -298,55 +285,27 @@ char readByte(uint8_t address_tx, uint8_t address_rx, uint8_t subAddress) {
 	//i2c.write(address, data_write, 1, 1); // no stop
 	//i2c.read(address, data, 1, 0);
 
-	//Blocking
-//	HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 1, 10); //Send adress of register ONLY
-//	HAL_I2C_Master_Receive(&hi2c2, address_tx, data, 1, 10);
 
-
-	//Non blocking - DMA
-	I2cTxCplt = 0;
-	HAL_I2C_Master_Transmit_DMA(&hi2c2, address_tx, data_write, 1);
-	while(!I2cTxCplt){
-	}
-
-	I2cRxCplt = 0;
-	HAL_I2C_Master_Receive_DMA(&hi2c2, address_tx, data, 1);
-	while(!I2cRxCplt){
-	}
-
-
-
+	HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 1, 10); //Send adress of register ONLY
+	HAL_I2C_Master_Receive(&hi2c2, address_tx, data, 1, 10);
 
 	return data[0];
 }
 
 void readBytes(uint8_t address_tx, uint8_t address_rx, uint8_t subAddress,
 	uint8_t count, uint8_t * dest) {
-
-
 	uint8_t data[14];
 	uint8_t data_write[1];
 	data_write[0] = subAddress;
 	//i2c.write(address, data_write, 1, 1); // no stop
 	//i2c.read(address, data, count, 0);
 
-	//Blocking
-//	HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 1, 10);
-//	HAL_I2C_Master_Receive(&hi2c2, address_rx, data, count, 10);
 
-//	for (int ii = 0; ii < count; ii++) {
-//		dest[ii] = data[ii];
-//	}
+	HAL_I2C_Master_Transmit(&hi2c2, address_tx, data_write, 1, 10);
+	HAL_I2C_Master_Receive(&hi2c2, address_rx, data, count, 10);
 
-	//Non blocking - DMA
-	I2cTxCplt = 0;
-	HAL_I2C_Master_Transmit_DMA(&hi2c2, address_tx, data_write, 1);
-	while(!I2cTxCplt){
-	}
-
-	I2cRxCplt = 0;
-	HAL_I2C_Master_Receive_DMA(&hi2c2, address_tx, dest, count);
-	while(!I2cRxCplt){
+	for (int ii = 0; ii < count; ii++) {
+		dest[ii] = data[ii];
 	}
 }
 
@@ -674,58 +633,6 @@ void calibrateMPU9250(float * dest1, float * dest2) {
 	dest2[2] = (float) accel_bias[2] / (float) accelsensitivity;
 }
 
-
-
-
-
-void magcalMPU9250(float * dest1, float * dest2)
- {
- uint16_t ii = 0, sample_count = 0;
- int32_t mag_bias[3] = {0, 0, 0}, mag_scale[3] = {0, 0, 0};
- int16_t mag_max[3] = {-32767, -32767, -32767}, mag_min[3] = {32767, 32767, 32767}, mag_temp[3] = {0, 0, 0};
-
- printf("Mag Calibration: Wave device in a figure eight until done!");
- HAL_Delay(4000);
-
-// shoot for ~fifteen seconds of mag data
-if(Mmode == 0x02) sample_count = 128;  // at 8 Hz ODR, new mag data is available every 125 ms
-if(Mmode == 0x06) sample_count = 1500;  // at 100 Hz ODR, new mag data is available every 10 ms
-for(ii = 0; ii < sample_count; ii++) {
-readMagData(mag_temp);  // Read the mag data
-for (int jj = 0; jj < 3; jj++) {
-  if(mag_temp[jj] > mag_max[jj]) mag_max[jj] = mag_temp[jj];
-  if(mag_temp[jj] < mag_min[jj]) mag_min[jj] = mag_temp[jj];
-}
-if(Mmode == 0x02) HAL_Delay(135);  // at 8 Hz ODR, new mag data is available every 125 ms
-if(Mmode == 0x06) HAL_Delay(12);  // at 100 Hz ODR, new mag data is available every 10 ms
-}
-
-
-// Get hard iron correction
- mag_bias[0]  = (mag_max[0] + mag_min[0])/2;  // get average x mag bias in counts
- mag_bias[1]  = (mag_max[1] + mag_min[1])/2;  // get average y mag bias in counts
- mag_bias[2]  = (mag_max[2] + mag_min[2])/2;  // get average z mag bias in counts
-
- dest1[0] = (float) mag_bias[0]*mRes*magCalibration[0];  // save mag biases in G for main program
- dest1[1] = (float) mag_bias[1]*mRes*magCalibration[1];
- dest1[2] = (float) mag_bias[2]*mRes*magCalibration[2];
-
-// Get soft iron correction estimate
- mag_scale[0]  = (mag_max[0] - mag_min[0])/2;  // get average x axis max chord length in counts
- mag_scale[1]  = (mag_max[1] - mag_min[1])/2;  // get average y axis max chord length in counts
- mag_scale[2]  = (mag_max[2] - mag_min[2])/2;  // get average z axis max chord length in counts
-
- float avg_rad = mag_scale[0] + mag_scale[1] + mag_scale[2];
- avg_rad /= 3.0;
-
- dest2[0] = avg_rad/((float)mag_scale[0]);
- dest2[1] = avg_rad/((float)mag_scale[1]);
- dest2[2] = avg_rad/((float)mag_scale[2]);
-
-printf("Mag Calibration done!");
- }
-
-
 // Accelerometer and gyroscope self test; check calibration wrt factory settings
 void MPU9250SelfTest(float * destination) // Should return percent deviation from factory trim values, +/- 14 or less deviation is a pass
 		{
@@ -965,7 +872,7 @@ void MadgwickQuaternionUpdate(float ax, float ay, float az, float gx, float gy,
 
 // Similar to Madgwick scheme but uses proportional and integral filtering on the error between estimated reference vectors and
 // measured ones.
-__attribute__((optimize("Ofast"))) void MahonyQuaternionUpdate(float ax, float ay, float az, float gx, float gy,
+void MahonyQuaternionUpdate(float ax, float ay, float az, float gx, float gy,
 		float gz, float mx, float my, float mz) {
 
 	float q1 = q[0], q2 = q[1], q3 = q[2], q4 = q[3]; // short name local variable for readability
@@ -1057,19 +964,5 @@ __attribute__((optimize("Ofast"))) void MahonyQuaternionUpdate(float ax, float a
 	q[1] = q2 * norm;
 	q[2] = q3 * norm;
 	q[3] = q4 * norm;
-
-}
-
-
-
-void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c){
-
-	I2cTxCplt = 1;
-
-}
-
-void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c){
-
-	I2cRxCplt = 1;
 
 }

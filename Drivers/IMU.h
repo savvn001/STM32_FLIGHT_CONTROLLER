@@ -181,7 +181,7 @@ IMU_StatusTypeDef imu_init();
 
 IMU_StatusTypeDef imu_calibrate();
 
-void calc_RollPitchYaw(int counter_value);
+void calc_RollPitchYaw(int counter_value, float *imu_roll, float *imu_pitch, float *imu_yaw);
 
 void printftest();
 /*
