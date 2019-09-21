@@ -23,15 +23,19 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "cmsis_os.h"
+#include "crc.h"
+#include "dma.h"
+#include "i2c.h"
+#include "spi.h"
+#include "tim.h"
+#include "usart.h"
+#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
 #include "../Drivers/PID.h"
 #include "../Drivers/GPS.h"
-
-#include "../Drivers/bno055_top.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include "arm_math.h"
@@ -71,25 +75,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-ADC_HandleTypeDef hadc1;
 
-CRC_HandleTypeDef hcrc;
-
-I2C_HandleTypeDef hi2c2;
-
-SPI_HandleTypeDef hspi2;
-
-TIM_HandleTypeDef htim4;
-TIM_HandleTypeDef htim11;
-
-UART_HandleTypeDef huart2;
-UART_HandleTypeDef huart6;
-
-osThreadId ControlLoopHandle;
 /* USER CODE BEGIN PV */
-
-
-
 
 int throttle = 0;
 
@@ -100,12 +87,27 @@ int esc4_total = 0;
 
 bool getRPY_flag = 0;
 
-/* IMU reading variables */
+//////////////////////////////////// IMU variables /////////////////////////
 float imu_roll;
 float imu_pitch;
 float imu_yaw;
 
-/* PID */
+
+float ax,ay,az;
+float gx,gy,gz;
+float mx,my,mz;
+float temp;
+
+
+//////////////////////////////////// GPS variables /////////////////////////
+
+
+uint8_t			M_UTC_Hour;
+uint8_t			M_UTC_Min;
+uint8_t			M_UTC_Sec;
+uint16_t		UTC_MicroSec;
+
+//////////////////////////////////// PID variables /////////////////////////
 float roll_setpoint = 0;
 float pitch_setpoint = 0;
 float yaw_setpoint = 0;
@@ -117,7 +119,7 @@ int tim11_count = 0;
 bool main_loop = 0;
 int N = 0;
 
-/* NRF24 Module */
+//////////////////////////////////// NRF24 variables //////////////////////////////
 uint64_t TxpipeAddrs = 0x11223344AA;
 char RxData[32];
 
@@ -153,37 +155,33 @@ int print_buffer_index = 0;
 
 #endif
 
+//////////////////////////////////// Peripheral defines  //////////////////////////////
+
 //1 if motors to be used
 #define MOTORS 1
 
 //1 if NRF24 module connected
-#define NRF24 1
+#define NRF24 0
 
 //1 if using battery
 #define BATTERY 0
 
 //1 if using GPS module
-#define GPS 0
+#define GPS 1
 
 //Enable ONLY 1 of the two below
 //1 if using IMU (Kris winer MBED Library, fusion algorithm on MCU)
-#define IMU 1
+#define IMU 0
+
+//1 if using MPU9250 with Ivense Motion Driver Library and DMP
+#define IMU_DMP 0 //DMP offloads fusion
+
+#define UART_DEBUG 0
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_USART2_UART_Init(void);
-static void MX_I2C2_Init(void);
-static void MX_TIM4_Init(void);
-static void MX_USART6_UART_Init(void);
-static void MX_ADC1_Init(void);
-static void MX_SPI2_Init(void);
-static void MX_CRC_Init(void);
-static void MX_TIM11_Init(void);
-void StartControlLoop(void const * argument);
-
 /* USER CODE BEGIN PFP */
 
 void ARM_ESCs();
@@ -194,7 +192,7 @@ void PWM2_Set(uint16_t value);
 void PWM3_Set(uint16_t value);
 void PWM4_Set(uint16_t value);
 
-void controlLoop();
+void pulse_posedge_handler();
 
 void print_data_to_pc();
 void update_PID_values();
@@ -231,7 +229,7 @@ uint16_t packetsLostCtr = 0;
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	//struct Adafruit_BNO055* c = newAdafruit_BNO055();
+
   /* USER CODE END 1 */
   
 
@@ -253,14 +251,13 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_USART2_UART_Init();
+  MX_DMA_Init();
   MX_I2C2_Init();
   MX_TIM4_Init();
-  MX_USART6_UART_Init();
-  MX_ADC1_Init();
   MX_SPI2_Init();
   MX_CRC_Init();
   MX_TIM11_Init();
+  MX_USART6_UART_Init();
   /* USER CODE BEGIN 2 */
 
 	/////////////////////////////////////////////////////////////////
@@ -283,23 +280,16 @@ int main(void)
 	}
 #endif
 
-
-
-
-
-
-
 	/////////////////////////////////////////////////////////////////
 	/////////////////////////////// GPS /////////////////////////////
 	/////////////////////////////////////////////////////////////////
 
 #if GPS
 
-	HAL_UART_Receive_DMA(&huart6, GPS_RX_Buffer, 600);
+	GPS_init();
 
-	//Start timer 3 in interrupt mode, used for DMA timeout
-	HAL_TIM_Base_Start_IT(&htim3);
-	HAL_TIM_OC_Start_IT(&htim3, TIM_CHANNEL_1);
+
+//	HAL_TIM_OC_Start_IT(&htim3, TIM_CHANNEL_2);
 
 #endif
 
@@ -324,8 +314,8 @@ int main(void)
 	////////////////////////// Init timers //////////////////////////
 	/////////////////////////////////////////////////////////////////
 
-//	HAL_TIM_Base_Start(&htim2);
-//	HAL_ADC_Start_DMA(&hadc1, &batteryLevel, 1);
+	//	HAL_TIM_Base_Start(&htim2);
+	//	HAL_ADC_Start_DMA(&hadc1, &batteryLevel, 1);
 
 	//Start up PWMs
 	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
@@ -341,36 +331,6 @@ int main(void)
 	PWM4_Set(2500);
 
   /* USER CODE END 2 */
-
-  /* USER CODE BEGIN RTOS_MUTEX */
-  /* add mutexes, ... */
-  /* USER CODE END RTOS_MUTEX */
-
-  /* USER CODE BEGIN RTOS_SEMAPHORES */
-  /* add semaphores, ... */
-  /* USER CODE END RTOS_SEMAPHORES */
-
-  /* USER CODE BEGIN RTOS_TIMERS */
-  /* start timers, add new ones, ... */
-  /* USER CODE END RTOS_TIMERS */
-
-  /* USER CODE BEGIN RTOS_QUEUES */
-  /* add queues, ... */
-  /* USER CODE END RTOS_QUEUES */
-
-  /* Create the thread(s) */
-  /* definition and creation of ControlLoop */
-  osThreadDef(ControlLoop, StartControlLoop, osPriorityRealtime, 0, 256);
-  ControlLoopHandle = osThreadCreate(osThread(ControlLoop), NULL);
-
-  /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
-  /* USER CODE END RTOS_THREADS */
-
-  /* Start scheduler */
-  osKernelStart();
-  
-  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -426,370 +386,6 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-}
-
-/**
-  * @brief ADC1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_ADC1_Init(void)
-{
-
-  /* USER CODE BEGIN ADC1_Init 0 */
-
-  /* USER CODE END ADC1_Init 0 */
-
-  ADC_ChannelConfTypeDef sConfig = {0};
-
-  /* USER CODE BEGIN ADC1_Init 1 */
-
-  /* USER CODE END ADC1_Init 1 */
-  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion) 
-  */
-  hadc1.Instance = ADC1;
-  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
-  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc1.Init.ScanConvMode = DISABLE;
-  hadc1.Init.ContinuousConvMode = ENABLE;
-  hadc1.Init.DiscontinuousConvMode = DISABLE;
-  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.NbrOfConversion = 1;
-  hadc1.Init.DMAContinuousRequests = DISABLE;
-  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
-  if (HAL_ADC_Init(&hadc1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time. 
-  */
-  sConfig.Channel = ADC_CHANNEL_7;
-  sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_28CYCLES;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN ADC1_Init 2 */
-
-  /* USER CODE END ADC1_Init 2 */
-
-}
-
-/**
-  * @brief CRC Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_CRC_Init(void)
-{
-
-  /* USER CODE BEGIN CRC_Init 0 */
-
-  /* USER CODE END CRC_Init 0 */
-
-  /* USER CODE BEGIN CRC_Init 1 */
-
-  /* USER CODE END CRC_Init 1 */
-  hcrc.Instance = CRC;
-  if (HAL_CRC_Init(&hcrc) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN CRC_Init 2 */
-
-  /* USER CODE END CRC_Init 2 */
-
-}
-
-/**
-  * @brief I2C2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2C2_Init(void)
-{
-
-  /* USER CODE BEGIN I2C2_Init 0 */
-
-  /* USER CODE END I2C2_Init 0 */
-
-  /* USER CODE BEGIN I2C2_Init 1 */
-
-  /* USER CODE END I2C2_Init 1 */
-  hi2c2.Instance = I2C2;
-  hi2c2.Init.ClockSpeed = 400000;
-  hi2c2.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c2.Init.OwnAddress1 = 0;
-  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c2.Init.OwnAddress2 = 0;
-  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C2_Init 2 */
-
-  /* USER CODE END I2C2_Init 2 */
-
-}
-
-/**
-  * @brief SPI2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_SPI2_Init(void)
-{
-
-  /* USER CODE BEGIN SPI2_Init 0 */
-
-  /* USER CODE END SPI2_Init 0 */
-
-  /* USER CODE BEGIN SPI2_Init 1 */
-
-  /* USER CODE END SPI2_Init 1 */
-  /* SPI2 parameter configuration*/
-  hspi2.Instance = SPI2;
-  hspi2.Init.Mode = SPI_MODE_MASTER;
-  hspi2.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
-  hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi2.Init.CRCPolynomial = 10;
-  if (HAL_SPI_Init(&hspi2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN SPI2_Init 2 */
-
-  /* USER CODE END SPI2_Init 2 */
-
-}
-
-/**
-  * @brief TIM4 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM4_Init(void)
-{
-
-  /* USER CODE BEGIN TIM4_Init 0 */
-
-  /* USER CODE END TIM4_Init 0 */
-
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-
-  /* USER CODE BEGIN TIM4_Init 1 */
-
-  /* USER CODE END TIM4_Init 1 */
-  htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 9;
-  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 20000;
-  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_ENABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM4_Init 2 */
-
-  /* USER CODE END TIM4_Init 2 */
-  HAL_TIM_MspPostInit(&htim4);
-
-}
-
-/**
-  * @brief TIM11 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM11_Init(void)
-{
-
-  /* USER CODE BEGIN TIM11_Init 0 */
-
-  /* USER CODE END TIM11_Init 0 */
-
-  /* USER CODE BEGIN TIM11_Init 1 */
-
-  /* USER CODE END TIM11_Init 1 */
-  htim11.Instance = TIM11;
-  htim11.Init.Prescaler = 100;
-  htim11.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim11.Init.Period = 65535;
-  htim11.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim11.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim11) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM11_Init 2 */
-
-  /* USER CODE END TIM11_Init 2 */
-
-}
-
-/**
-  * @brief USART2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART2_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART2_Init 0 */
-
-  /* USER CODE END USART2_Init 0 */
-
-  /* USER CODE BEGIN USART2_Init 1 */
-
-  /* USER CODE END USART2_Init 1 */
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART2_Init 2 */
-
-  /* USER CODE END USART2_Init 2 */
-
-}
-
-/**
-  * @brief USART6 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART6_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART6_Init 0 */
-
-  /* USER CODE END USART6_Init 0 */
-
-  /* USER CODE BEGIN USART6_Init 1 */
-
-  /* USER CODE END USART6_Init 1 */
-  huart6.Instance = USART6;
-  huart6.Init.BaudRate = 115200;
-  huart6.Init.WordLength = UART_WORDLENGTH_8B;
-  huart6.Init.StopBits = UART_STOPBITS_1;
-  huart6.Init.Parity = UART_PARITY_NONE;
-  huart6.Init.Mode = UART_MODE_TX_RX;
-  huart6.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart6.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart6) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART6_Init 2 */
-
-  /* USER CODE END USART6_Init 2 */
-
-}
-
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12|GPIO_PIN_14, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : PA5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : kill_Pin */
-  GPIO_InitStruct.Pin = kill_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(kill_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PC5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PB12 PB14 */
-  GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_14;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PWM_RE_INT_Pin */
-  GPIO_InitStruct.Pin = PWM_RE_INT_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(PWM_RE_INT_GPIO_Port, &GPIO_InitStruct);
-
 }
 
 /* USER CODE BEGIN 4 */
@@ -857,8 +453,10 @@ int divider = 0;
  * This function gets called by the GPIO_EXTI callback when the PWM_RE_INT_Pin triggers an interrupt,
  * which is on the rising edge of every PWM pulse.
  */
-void controlLoop(){
+void pulse_posedge_handler() {
 
+	//Only want this to happen in main loop - not during init sequence
+	if (main_loop) {
 
 #if NRF24
 		//Pack acknowledge data 0 - sent every control loop
@@ -883,8 +481,10 @@ void controlLoop(){
 			//Write the acknowledge payload back to the transmitter/controller
 			if (loop_counter == CRTL_LOOP_FREQ - 1) {
 				NRF24_writeAckPayload(1, AckPayload_1, 32);
+
 			} else {
 				NRF24_writeAckPayload(1, AckPayload_0, 32);
+
 			}
 			//Unpack the 32 byte payload from controller
 			unpackRxData();
@@ -913,7 +513,7 @@ void controlLoop(){
 		}
 
 		if (packetsLostCtr > 10) {
-			//lostConnection();
+			lostConnection();
 		}
 
 #endif
@@ -924,7 +524,7 @@ void controlLoop(){
 
 		int tim1 = tim11_count;
 
-		calc_RollPitchYaw(tim11_count, &imu_roll, &imu_pitch, &imu_yaw);
+		calc_RollPitchYaw(tim11_count);
 
 
 		tim11_count = htim11.Instance->CNT; //read TIM11 counter value, used for integral calculations
@@ -932,8 +532,23 @@ void controlLoop(){
 
 		volatile int deltat = tim2-tim1;
 
-#endif
 
+		imu_pitch = get_pitch();
+		imu_roll = get_roll();
+		imu_yaw = get_yaw();
+		//
+		//
+		//		//Offset roll because IMU is upside down, comment out if not
+		//		bool done = 0;
+		//		if (imu_yaw > 0 && !done) {
+		//			imu_yaw -= 180.0f;
+		//			done = 1;
+		//		}
+		//		if (imu_yaw < 0 && !done) {
+		//			imu_yaw += 180.0f;
+		//			done = 1;
+		//		}
+#endif
 		if (airmode) {
 			/*******    Pitch PID calculation  ********/
 			pid_output_pitch = pid_calculate_pitch(imu_pitch, 0, 0);
@@ -1008,8 +623,10 @@ void controlLoop(){
 
 #endif
 
+	}
 
 }
+#if UART_DEBUG
 
 /*
  *	Some functions to allow the program to use printf,
@@ -1031,7 +648,7 @@ int _write(int file, char *ptr, int len) {
 	}
 	return len;
 }
-
+#endif
 void printToPC() {
 #if PID_TUNE_DEBUG
 	//After n number of samples logged into buffer, print out to PC
@@ -1052,20 +669,20 @@ void printToPC() {
 }
 
 ////GPIO interrupt callback
-//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-//
-////GPIO pin configured to capture rising edge interrupt of PWM signals
-//	if (GPIO_Pin == PWM_RE_INT_Pin && main_loop) {
-//		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
-//		pulse_posedge_handler();
-//		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
-//	}
-//
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+
+//GPIO pin configured to capture rising edge interrupt of PWM signals
+	if (GPIO_Pin == PWM_INT_Pin && main_loop) {
+		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
+		pulse_posedge_handler();
+		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
+	}
+
 //	if (GPIO_Pin == kill_Pin && main_loop) {
 //		//kill();
 //	}
-//
-//}
+
+}
 
 // Unpack received 32 byte payload from transmitter, see documentation for specification details
 void unpackRxData() {
@@ -1084,14 +701,14 @@ void unpackRxData() {
 	}
 
 	//Unpack PID data
-//	uint16_t roll_p_rx = (RxData[9] & 0xFF) | (RxData[10] << 8);
-//	uint16_t roll_i_rx = (RxData[11] & 0xFF) | (RxData[12] << 8);
-//	uint16_t roll_d_rx = (RxData[13] & 0xFF) | (RxData[14] << 8);
+	//	uint16_t roll_p_rx = (RxData[9] & 0xFF) | (RxData[10] << 8);
+	//	uint16_t roll_i_rx = (RxData[11] & 0xFF) | (RxData[12] << 8);
+	//	uint16_t roll_d_rx = (RxData[13] & 0xFF) | (RxData[14] << 8);
 
-//	//Remap
-//	pitch_p_gain = (float) roll_p_rx / 100;
-//	pitch_i_gain = (float) roll_i_rx / 100;
-//	pitch_d_gain = (float) roll_d_rx / 100;
+	//	//Remap
+	//	pitch_p_gain = (float) roll_p_rx / 100;
+	//	pitch_i_gain = (float) roll_i_rx / 100;
+	//	pitch_d_gain = (float) roll_d_rx / 100;
 
 }
 
@@ -1129,72 +746,80 @@ void packAckPayData_1() {
 	//ID for packet 1
 	AckPayload_1[0] = 0xFF;
 
-//	//Next few bytes are just 1 Byte values
-//	AckPayload_1[1] = GPS.satellites;
-//	AckPayload_1[2] = GPS.day;
-//	AckPayload_1[3] = GPS.month;
-//	AckPayload_1[4] = GPS.year;
-//	AckPayload_1[5] = GPS.minute;
-//	AckPayload_1[6] = GPS.hour;
-//
-//	//Next byte = GPS Speed
-//	unsigned char temp[sizeof(float)];
-//	memcpy(temp, &GPS.speed, sizeof(GPS.speed));
-//
-//	AckPayload_1[7] = temp[0];
-//	AckPayload_1[8] = temp[1];
-//	AckPayload_1[9] = temp[2];
-//	AckPayload_1[10] = temp[3];
-//
-//	//Next byte = GPS Latitude
-//	memcpy(temp, &GPS.latitude, sizeof(GPS.latitude));
-//
-//	AckPayload_1[11] = temp[0];
-//	AckPayload_1[12] = temp[1];
-//	AckPayload_1[13] = temp[2];
-//	AckPayload_1[14] = temp[3];
-//
-//	//Next byte = GPS Longitude
-//	memcpy(temp, &GPS.longitude, sizeof(GPS.longitude));
-//
-//	AckPayload_1[15] = temp[0];
-//	AckPayload_1[16] = temp[1];
-//	AckPayload_1[17] = temp[2];
-//	AckPayload_1[18] = temp[3];
-//
-//	//Next byte = GPS Altitude
-//	memcpy(temp, &GPS.altitude, sizeof(GPS.altitude));
-//
-//	AckPayload_1[19] = temp[0];
-//	AckPayload_1[20] = temp[1];
-//	AckPayload_1[21] = temp[2];
-//	AckPayload_1[22] = temp[3];
+	//	//Next few bytes are just 1 Byte values
+	//	AckPayload_1[1] = GPS.satellites;
+	//	AckPayload_1[2] = GPS.day;
+	//	AckPayload_1[3] = GPS.month;
+	//	AckPayload_1[4] = GPS.year;
+	//	AckPayload_1[5] = GPS.minute;
+	//	AckPayload_1[6] = GPS.hour;
+	//
+	//	//Next byte = GPS Speed
+	//	unsigned char temp[sizeof(float)];
+	//	memcpy(temp, &GPS.speed, sizeof(GPS.speed));
+	//
+	//	AckPayload_1[7] = temp[0];
+	//	AckPayload_1[8] = temp[1];
+	//	AckPayload_1[9] = temp[2];
+	//	AckPayload_1[10] = temp[3];
+	//
+	//	//Next byte = GPS Latitude
+	//	memcpy(temp, &GPS.latitude, sizeof(GPS.latitude));
+	//
+	//	AckPayload_1[11] = temp[0];
+	//	AckPayload_1[12] = temp[1];
+	//	AckPayload_1[13] = temp[2];
+	//	AckPayload_1[14] = temp[3];
+	//
+	//	//Next byte = GPS Longitude
+	//	memcpy(temp, &GPS.longitude, sizeof(GPS.longitude));
+	//
+	//	AckPayload_1[15] = temp[0];
+	//	AckPayload_1[16] = temp[1];
+	//	AckPayload_1[17] = temp[2];
+	//	AckPayload_1[18] = temp[3];
+	//
+	//	//Next byte = GPS Altitude
+	//	memcpy(temp, &GPS.altitude, sizeof(GPS.altitude));
+	//
+	//	AckPayload_1[19] = temp[0];
+	//	AckPayload_1[20] = temp[1];
+	//	AckPayload_1[21] = temp[2];
+	//	AckPayload_1[22] = temp[3];
 
 }
+
+uint8_t discard = 1;
 
 #if GPS
 
-////	Implementation of output compare elapsed callback for Timer 3.
-////	As explained at top of code this will trigger when TIM3 OC has reached it's max counter value.
-////	This is configured to happen each time the GPS module data has been fully sent (DMA timeout for UART 6)
-void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
+//////	Implementation of output compare elapsed callback for Timer 3.
+//////	As explained at top of code this will trigger when TIM3 OC has reached it's max counter value.
+//////	This is configured to happen each time the GPS module data has been fully sent (DMA timeout for UART 6)
+//void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
+//
+//		//GPS Data UART Transmission complete
+//		if (htim->Instance == TIM3) {
+//
+//			//Stop the DMA transfer as we know have reached end of message
+//			HAL_UART_DMAStop(&huart6);
+//
+//			//First buffer received will probably be somewhere in the middle of a message so discard it
+//			if(discard){
+//				discard = 0;
+//			}else{
+//				//Parse the received data
+//				GPS_parse_data();
+//			}
+//
+//			//Begin receiving again
+//			HAL_UART_Receive_DMA(&huart6, GPS_RX_Buffer, 600);
+//
+//			//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
+//		}
+//
+//}
 
-	//GPS Data UART Transmission complete
-	if (htim->Instance == TIM3) {
-
-		//Stop the DMA transfer as we know have reached end of message
-		HAL_UART_AbortReceive_IT(&huart6);
-
-		//Parse the received data
-		parse_GPS_data();
-
-		//Begin receiving again
-		HAL_UART_Receive_DMA(&huart6, GPS_RX_Buffer, 600);
-
-		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
-	}
-
-}
 
 #endif
 
@@ -1252,11 +877,6 @@ void resetNRF24() {
 
 }
 
-float map(int x, int in_min, int in_max, int out_min, int out_max) {
-	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
-
-
 #if BATTERY
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 
@@ -1281,31 +901,9 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 #endif
 /* USER CODE END 4 */
 
-/* USER CODE BEGIN Header_StartControlLoop */
-/**
-  * @brief  Function implementing the ControlLoop thread.
-  * @param  argument: Not used 
-  * @retval None
-  */
-/* USER CODE END Header_StartControlLoop */
-void StartControlLoop(void const * argument)
-{
-
-  /* USER CODE BEGIN 5 */
-  /* Infinite loop */
-  for(;;)
-  {
-	controlLoop();
-
-	//Delay 2ms = 500Hz update rate
-    osDelay(2);
-  }
-  /* USER CODE END 5 */ 
-}
-
 /**
   * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM3 interrupt took place, inside
+  * @note   This function is called  when TIM1 interrupt took place, inside
   * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
   * a global variable "uwTick" used as application time base.
   * @param  htim : TIM handle
@@ -1316,7 +914,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 0 */
 
   /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM3) {
+  if (htim->Instance == TIM1) {
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
@@ -1347,7 +945,7 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 { 
   /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
+	/* User can add his own implementation to report the file name and line number,
      tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }

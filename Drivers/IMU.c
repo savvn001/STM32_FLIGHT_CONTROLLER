@@ -45,7 +45,7 @@ int16_t accelCount[3];  // Stores the 16-bit signed accelerometer sensor output
 int16_t gyroCount[3];   // Stores the 16-bit signed gyro sensor output
 int16_t magCount[3];    // Stores the 16-bit signed magnetometer sensor output
 float magCalibration[3] = { 0, 0, 0 }, magbias[3] = { 0, 0, 0 }; // Factory mag calibration and mag bias
-float gyroBias[3] = {0,0,0 }, accelBias[3] = { 0,0,0}; // Bias corrections for gyro and accelerometer
+float gyroBias[3] = { 0, 0, 0. }, accelBias[3] = { 0, 0., 0.}; // Bias corrections for gyro and accelerometer
 float ax, ay, az, gx, gy, gz, mx, my, mz; // variables to hold latest sensor data values
 int16_t tempCount; // Stores the real internal chip temperature in degrees Celsius
 float temperature;
@@ -76,7 +76,7 @@ float eInt[3] = { 0.0f, 0.0f, 0.0f }; // vector to hold integral error for Mahon
 
 IMU_StatusTypeDef imu_init(I2C_HandleTypeDef* handle) {
 
-	printf("STM32 Online..\r\n");
+	//printf("STM32 Online..\r\n");
 
 	//Check if MPU9250 responds
 	if (HAL_I2C_IsDeviceReady(handle, 0xD0, 2, 100) == HAL_OK) {
@@ -153,7 +153,7 @@ IMU_StatusTypeDef imu_calibrate() {
 
 }
 
-void calc_RollPitchYaw(int counter_value, float *imu_roll, float *imu_pitch, float *imu_yaw) {
+void calc_RollPitchYaw(int counter_value) {
 
 	//******* Get roll pitch & yaw values from registers (also from library example but adapted slightly) ********
 
@@ -187,15 +187,38 @@ void calc_RollPitchYaw(int counter_value, float *imu_roll, float *imu_pitch, flo
 	if(Now - lastUpdate < 0){
 		//Take time difference taking into account reset of timer
 		//Formula for getting timer count into seconds = COUNT * (1/TIMER_CLK)*PRESCALER
-		deltat = (float) (((65534-lastUpdate)+Now) * (1 / (TIMER_CLK_FREQ / 99.0f)));
+		//deltat = (float) (((65535-lastUpdate)+Now) * (1 / (TIMER_CLK_FREQ / 2000.0f)));
 
 
+		//Calculating time difference using ARM DSP Library:
+
+		float32_t timer_load = 65535;
+		float32_t time_difference = 0;
+
+		//Get time difference
+		arm_sub_f32(&timer_load, &lastUpdate, &time_difference, 1);
+		//Add to now
+		float32_t time_diff_plus_now = 0;
+		arm_add_f32(&time_difference, &Now, &time_diff_plus_now, 1);
+
+		float32_t top;
+		float32_t prescaler = 999;
+
+		arm_mult_f32(&prescaler, &time_diff_plus_now, &top, 1);
+
+		deltat = top/TIMER_CLK_FREQ;
 
 	}
 	else{
 	//Otherwise normally the count difference will be positive
-	deltat = (float) ((Now - lastUpdate) * (1 / (TIMER_CLK_FREQ / 99.0f))); // set integration time by time elapsed since last filter update
+	//deltat = (float) ((Now - lastUpdate) * (1 / (TIMER_CLK_FREQ / 2000.0f))); // set integration time by time elapsed since last filter update
+		float32_t result1 = 0;
+		arm_sub_f32(&Now, &lastUpdate, &result1, 1);
+		float32_t result2 = 0;
+		float32_t prescaler = 999;
+		arm_mult_f32(&result1, &prescaler,&result2, 1);
 
+		deltat = result2/TIMER_CLK_FREQ;
 	}
 
 	lastUpdate = Now;
@@ -220,18 +243,13 @@ void calc_RollPitchYaw(int counter_value, float *imu_roll, float *imu_pitch, flo
 	yaw = atan2(2.0 * (q[1] * q[2] + q[0] * q[3]), q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]);
 	pitch = -asin(2.0 * (q[1] * q[3] - q[0] * q[2]));
 	roll = atan2(2.0 * (q[0] * q[1] + q[2] * q[3]), q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]);
-	pitch *= 180.0f / PI;
-	yaw *= 180.0f / PI;
+	pitch *= 180.0 / PI;
+	yaw *= 180.0 / PI;
 	yaw -=  -1.1; // CHANGE-> (In Leeds, UK declination = -1.1) ... Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04 (+13.8)
-	roll *= 180.0f / PI;
+	roll *= 180.0 / PI;
 
 	sum = 0;
 	sumCount = 0;
-
-
-	*imu_roll = roll;
-	*imu_pitch = pitch;
-	*imu_yaw = yaw;
 
 }
 
@@ -383,7 +401,7 @@ void readGyroData(int16_t * destination) {
 
 void readMagData(int16_t * destination) {
 	uint8_t rawData[7]; // x/y/z gyro register data, ST2 register stored here, must read ST2 at end of data acquisition
-	if (readByte(AK8963_ADDRESS_TX, AK8963_ADDRESS_RX, AK8963_ST1) & 0x01) { // wait for magnetometer data ready bit to be set
+	//if (readByte(AK8963_ADDRESS_TX, AK8963_ADDRESS_RX, AK8963_ST1) & 0x01) { // wait for magnetometer data ready bit to be set
 
 		readBytes(AK8963_ADDRESS_TX, AK8963_ADDRESS_RX, AK8963_XOUT_L, 7, &rawData[0]); // Read the six raw data and ST2 registers sequentially into data array
 		uint8_t c = rawData[6]; // End data read by reading ST2 register
@@ -395,7 +413,7 @@ void readMagData(int16_t * destination) {
 			destination[2] =
 					(int16_t) (((int16_t) rawData[5] << 8) | rawData[4]);
 		}
-	}
+	//}
 }
 
 int16_t readTempData() {

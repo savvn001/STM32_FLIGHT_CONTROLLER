@@ -2003,6 +2003,20 @@ void HAL_UART_IRQHandler(UART_HandleTypeDef *huart)
   uint32_t errorflags = 0x00U;
   uint32_t dmarequest = 0x00U;
 
+  uint32_t tmp_flag = 0, tmp_it_source = 0;
+
+  tmp_flag = __HAL_UART_GET_FLAG(huart, UART_FLAG_IDLE);
+
+  tmp_it_source = __HAL_UART_GET_IT_SOURCE(huart, UART_IT_IDLE);
+
+  /* UART RX Idle interrupt --------------------------------------------*/
+    if((tmp_flag != RESET) && (tmp_it_source != RESET))
+    {
+      __HAL_UART_CLEAR_IDLEFLAG(huart);
+      HAL_UART_RxIdleCallback(huart);
+    }
+
+
   /* If no error occurs */
   errorflags = (isrflags & (uint32_t)(USART_SR_PE | USART_SR_FE | USART_SR_ORE | USART_SR_NE));
   if (errorflags == RESET)
@@ -2721,6 +2735,21 @@ static void UART_EndRxTransfer(UART_HandleTypeDef *huart)
 }
 
 /**
+  * @brief  Rx idle callback.
+  * @param  huart: Pointer to a UART_HandleTypeDef structure that contains
+  *                the configuration information for the specified UART module.
+  * @retval None
+  */
+ __weak void HAL_UART_RxIdleCallback(UART_HandleTypeDef *huart)
+{
+  /* Prevent unused argument(s) compilation warning */
+  UNUSED(huart);
+  /* NOTE: This function should not be modified, when the callback is needed,
+           the HAL_UART_RxIdleCallback can be implemented in the user file
+   */
+}
+
+/**
   * @brief  DMA UART communication abort callback, when initiated by HAL services on Error
   *         (To be called at end of DMA Abort procedure following error occurrence).
   * @param  hdma  Pointer to a DMA_HandleTypeDef structure that contains
@@ -2887,6 +2916,9 @@ static void UART_DMARxOnlyAbortCallback(DMA_HandleTypeDef *hdma)
   HAL_UART_AbortReceiveCpltCallback(huart);
 #endif /* USE_HAL_UART_REGISTER_CALLBACKS */
 }
+
+
+
 
 /**
   * @brief  Sends an amount of data in non blocking mode.

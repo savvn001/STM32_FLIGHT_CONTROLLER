@@ -19,8 +19,6 @@ Src/stm32f4xx_hal_msp.o: ../Src/stm32f4xx_hal_msp.c ../Inc/main.h \
  /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_dma.h \
  /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_dma_ex.h \
  /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_cortex.h \
- /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_adc.h \
- /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_adc_ex.h \
  /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_crc.h \
  /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_flash.h \
  /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_flash_ex.h \
@@ -75,10 +73,6 @@ Src/stm32f4xx_hal_msp.o: ../Src/stm32f4xx_hal_msp.c ../Inc/main.h \
 /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_dma_ex.h:
 
 /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_cortex.h:
-
-/Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_adc.h:
-
-/Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_adc_ex.h:
 
 /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_crc.h:
 

@@ -11,7 +11,7 @@
 
 #include <stdio.h>
 #include "math.h"
-#include <stdbool.h>
+
 
 #define MPU9250_ADDRESS_TX 0xD0 //NICK - These include R/W bit on ends
 #define MPU9250_ADDRESS_RX 0xD1
@@ -181,7 +181,7 @@ IMU_StatusTypeDef imu_init();
 
 IMU_StatusTypeDef imu_calibrate();
 
-void calc_RollPitchYaw(int counter_value, float *imu_roll, float *imu_pitch, float *imu_yaw);
+void calc_RollPitchYaw(int counter_value);
 
 void printftest();
 /*
@@ -217,7 +217,7 @@ int16_t readTempData();
 
 void resetMPU9250();
 void initAK8963(float * destination);
-void magcalMPU9250(float * dest1, float * dest2);
+
 void initMPU9250();
 
 float get_roll();

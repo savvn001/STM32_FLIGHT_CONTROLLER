@@ -1,40 +1,39 @@
-/*
- * GPS.h
- *
- *  Created on: Jul 30, 2019
- *      Author: nick_savva
- */
+#include "stm32f4xx_hal.h"
+#include "usart.h"
+#define GPS_BUFFERSIZE 600
+uint8_t GPS_RX_Buffer[GPS_BUFFERSIZE];
 
-#ifndef GPS_H_
-#define GPS_H_
+bool first = 1;
 
-#include <stdint.h>
-
-//GPS module data struct
-typedef struct{
-
-	float speed;
-	float longitude;
-	float latitude;
-	float altitude;
-	float course;
-	char satellites;
-	char day;
-	char month;
-	char year;
-	char second;
-	char minute;
-	char hour;
-
-} GPS_typedef;
-
-GPS_typedef GPS;
+void GPS_init(){
 
 
-uint8_t GPS_RX_Buffer[600];
+	HAL_UART_Receive_DMA(&huart6, GPS_RX_Buffer, GPS_BUFFERSIZE);
+
+	for (int i = 0; i < GPS_BUFFERSIZE; ++i) {
+		GPS_RX_Buffer[i] = 0;
+	}
+
+}
+
+void GPS_parse(){
+
+	HAL_UART_Receive_DMA(&huart6, GPS_RX_Buffer, GPS_BUFFERSIZE);
+
+	if(first){
+		first = 0;
+	}
+	else{
+
+		//Parse the NMEA message
 
 
 
-void parse_GPS_data();
+	}
 
-#endif /* GPS_H_ */
+	for (int i = 0; i < GPS_BUFFERSIZE; ++i) {
+		GPS_RX_Buffer[i] = 0;
+	}
+
+
+}
