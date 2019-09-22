@@ -33,10 +33,10 @@ Src/main.o: ../Src/main.c ../Inc/main.h \
  /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
  ../Inc/crc.h ../Inc/main.h ../Inc/dma.h ../Inc/i2c.h ../Inc/spi.h \
  ../Inc/tim.h ../Inc/usart.h ../Inc/gpio.h ../Src/../Drivers/PID.h \
- ../Src/../Drivers/GPS.h ../Inc/arm_math.h \
- ../Drivers/CMSIS/Include/cmsis_compiler.h ../Src/../Drivers/MY_NRF24.h \
- ../Src/../Drivers/nRF24L01.h ../Src/../Drivers/dwt_delay.h \
- ../Src/../Drivers/IMU.h
+ ../Src/../Drivers/GPS.h ../Src/../Drivers/minnmea/minmea.h \
+ ../Inc/arm_math.h ../Drivers/CMSIS/Include/cmsis_compiler.h \
+ ../Src/../Drivers/MY_NRF24.h ../Src/../Drivers/nRF24L01.h \
+ ../Src/../Drivers/dwt_delay.h ../Src/../Drivers/IMU.h
 
 ../Inc/main.h:
 
@@ -123,6 +123,8 @@ Src/main.o: ../Src/main.c ../Inc/main.h \
 ../Src/../Drivers/PID.h:
 
 ../Src/../Drivers/GPS.h:
+
+../Src/../Drivers/minnmea/minmea.h:
 
 ../Inc/arm_math.h:
 

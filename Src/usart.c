@@ -21,7 +21,7 @@
 #include "usart.h"
 
 /* USER CODE BEGIN 0 */
-extern void parseGPS();
+extern void UART_timeout();
 
 /* USER CODE END 0 */
 
@@ -159,7 +159,7 @@ void HAL_UART_RxIdleCallback(UART_HandleTypeDef* huart)
       huart->gState = HAL_UART_STATE_READY;
     }
   }
-  GPS_parse();
+  UART_timeout();
 }
 
 /* USER CODE END 1 */

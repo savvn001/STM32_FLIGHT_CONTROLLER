@@ -29,6 +29,7 @@ SUBDIRS := \
 Drivers \
 Drivers/STM32F4_LL_Drivers \
 Drivers/STM32F4xx_HAL_Driver/Src \
+Drivers/minnmea \
 Src \
 Startup \
 
