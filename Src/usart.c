@@ -159,7 +159,9 @@ void HAL_UART_RxIdleCallback(UART_HandleTypeDef* huart)
       huart->gState = HAL_UART_STATE_READY;
     }
   }
+
   UART_timeout();
+
 }
 
 /* USER CODE END 1 */
