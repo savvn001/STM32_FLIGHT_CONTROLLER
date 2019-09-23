@@ -116,15 +116,15 @@ float pid_output_pitch = 0;
 float pid_output_yaw = 0;
 
 int tim11_count = 0;
-bool main_loop = 0;
+
 int N = 0;
 
 //////////////////////////////////// NRF24 variables //////////////////////////////
 uint64_t TxpipeAddrs = 0x11223344AA;
-char RxData[32];
+unsigned char RxData[32];
 
-char AckPayload_0[32];
-char AckPayload_1[32] = "Ack by Drone!";
+unsigned char AckPayload_0[32];
+unsigned char AckPayload_1[32];
 
 //These hold the received joystick positions from the transmitter, left and right respectively
 int16_t L_Joystick_XPos = 0;
@@ -334,6 +334,12 @@ int main(void)
 	while (1) {
 
 		main_loop = 1;
+
+//		if(RxIdleFlag){
+//
+//			UART_timeout();
+//			RxIdleFlag = 0;
+//		}
 
     /* USER CODE END WHILE */
 
@@ -717,7 +723,7 @@ void unpackRxData() {
 void packAckPayData_0() {
 
 	//ID for packet 0
-	AckPayload_0[0] = 0x00;
+	AckPayload_0[0] = 0x03;
 
 	//Next 2 bytes = Battery level
 	AckPayload_0[1] = batteryLevel;
@@ -746,7 +752,6 @@ void packAckPayData_1() {
 	//ID for packet 1
 	AckPayload_1[0] = 0xFF;
 
-	//Pass array into GPS driver, will modify it
 	getGPSData(AckPayload_1);
 
 }
