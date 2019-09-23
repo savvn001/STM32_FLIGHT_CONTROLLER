@@ -19,10 +19,10 @@ References:				This library was written based on the Arduino NRF24 Open-Source l
 
 //List of header files
 #include "MY_NRF24.h"
-#include <stdio.h>
 #include "dwt_delay.h"
-SPI_HandleTypeDef hspi2;
+//#include <stdio.h>
 
+extern SPI_HandleTypeDef hspi2;
 //*** Variables declaration ***//
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -49,8 +49,8 @@ static UART_HandleTypeDef nrf24_huart;
 
 
 //** DMA transfer flags **//
-bool SPI_TxCplt = 0;
-bool SPI_RxCplt = 0;
+bool SPI_TxCplt = 1;
+bool SPI_RxCplt = 1;
 
 //**** Functions prototypes ****//
 //Microsecond delay function
@@ -84,15 +84,15 @@ uint8_t NRF24_read_register(uint8_t reg)
 	NRF24_csn(0);
 	//Transmit register address
 	spiBuf[0] = reg&0x1F;
-	SPI_TxCplt = 0;
-	HAL_SPI_Transmit_IT(&hspi2, spiBuf, 1);
-	while(!SPI_TxCplt){
-	}
+	//SPI_TxCplt = 0;
+	HAL_SPI_Transmit(&nrf24_hspi, spiBuf, 1,2);
+//	while(!SPI_TxCplt){
+//	}
 	//Receive data
-	SPI_RxCplt = 0;
-	HAL_SPI_Receive_IT(&hspi2, &spiBuf[1], 1);
-	while(!SPI_RxCplt){
-	}
+	//SPI_RxCplt = 0;
+	HAL_SPI_Receive(&nrf24_hspi, &spiBuf[1], 1,2);
+//	while(!SPI_RxCplt){
+//	}
 	retData = spiBuf[1];
 	//Bring CSN high
 	NRF24_csn(1);
@@ -107,15 +107,15 @@ void NRF24_read_registerN(uint8_t reg, uint8_t *buf, uint8_t len)
 	//Transmit register address
 	spiBuf[0] = reg&0x1F;
 	//spiStatus = NRF24_SPI_Write(spiBuf, 1);
-	SPI_TxCplt = 0;
-	HAL_SPI_Transmit_IT(&hspi2, spiBuf, 1);
-	while(!SPI_TxCplt){
-	}
+	//SPI_TxCplt = 0;
+	HAL_SPI_Transmit(&nrf24_hspi, spiBuf, 1,2);
+	//while(!SPI_TxCplt){
+//	}
 	//Receive data
-	SPI_RxCplt = 0;
-	HAL_SPI_Receive_IT(&hspi2, buf, len);
-	while(!SPI_RxCplt){
-	}
+	//SPI_RxCplt = 0;
+	HAL_SPI_Receive(&nrf24_hspi, buf, len,2);
+//	while(!SPI_RxCplt){
+//	}
 	//Bring CSN high
 	NRF24_csn(1);
 }
@@ -128,10 +128,10 @@ void NRF24_write_register(uint8_t reg, uint8_t value)
 	//Transmit register address and data
 	spiBuf[0] = reg|0x20;
 	spiBuf[1] = value;
-	SPI_TxCplt = 0;
-	HAL_SPI_Transmit_IT(&hspi2, spiBuf, 2);
-	while(!SPI_TxCplt){
-	}
+	//SPI_TxCplt = 0;
+	HAL_SPI_Transmit(&nrf24_hspi, spiBuf, 2,2);
+//	while(!SPI_TxCplt){
+//	}
 	//Bring CSN high
 	NRF24_csn(1);
 }
@@ -143,14 +143,14 @@ void NRF24_write_registerN(uint8_t reg, const uint8_t* buf, uint8_t len)
 	NRF24_csn(0);
 	//Transmit register address and data
 	spiBuf[0] = reg|0x20;
-	SPI_TxCplt = 0;
-	HAL_SPI_Transmit_IT(&hspi2, spiBuf, 1);
-	while(!SPI_TxCplt){
-	}
-	SPI_TxCplt = 0;
-	HAL_SPI_Transmit_IT(&hspi2, (uint8_t*)buf, len);
-	while(!SPI_TxCplt){
-	}
+	//SPI_TxCplt = 0;
+	HAL_SPI_Transmit(&nrf24_hspi, spiBuf, 1,2);
+//	while(!SPI_TxCplt){
+//	}
+	//SPI_TxCplt = 0;
+	HAL_SPI_Transmit(&nrf24_hspi, (uint8_t*)buf, len,2);
+//	while(!SPI_TxCplt){
+//	}
 	//Bring CSN high
 	NRF24_csn(1);
 }
@@ -162,14 +162,14 @@ void NRF24_write_payload(const void* buf, uint8_t len)
 	NRF24_csn(0);
 	//Send Write Tx payload command followed by pbuf data
 	wrPayloadCmd = CMD_W_TX_PAYLOAD;
-	SPI_TxCplt = 0;
-	HAL_SPI_Transmit_IT(&hspi2, &wrPayloadCmd, 1);
-	while(!SPI_TxCplt){
-	}
-	SPI_TxCplt = 0;
-	HAL_SPI_Transmit_IT(&hspi2, (uint8_t *)buf, len);
-	while(!SPI_TxCplt){
-	}
+	//SPI_TxCplt = 0;
+	HAL_SPI_Transmit(&nrf24_hspi, &wrPayloadCmd, 1,2);
+//	while(!SPI_TxCplt){
+//	}
+	//SPI_TxCplt = 0;
+	HAL_SPI_Transmit(&nrf24_hspi, (uint8_t *)buf, len,2);
+//	while(!SPI_TxCplt){
+//	}
 	//Bring CSN high
 	NRF24_csn(1);
 }
@@ -182,14 +182,14 @@ void NRF24_read_payload(void* buf, uint8_t len)
 	//Read data from Rx payload buffer
 	NRF24_csn(0);
 	cmdRxBuf = CMD_R_RX_PAYLOAD;
-	SPI_TxCplt = 0;
-	HAL_SPI_Transmit_IT(&hspi2, &cmdRxBuf, 1);
-	while(!SPI_TxCplt){
-	}
-	SPI_RxCplt = 0;
-	HAL_SPI_Receive_IT(&hspi2, buf, data_len);
-	while(!SPI_RxCplt){
-	}
+	//SPI_TxCplt = 0;
+	HAL_SPI_Transmit(&nrf24_hspi, &cmdRxBuf, 1,2);
+//	while(!SPI_TxCplt){
+//	}
+	//SPI_RxCplt = 0;
+	HAL_SPI_Receive(&nrf24_hspi, buf, data_len,2);
+//	while(!SPI_RxCplt){
+//	}
 	NRF24_csn(1);
 }
 
@@ -215,7 +215,7 @@ uint8_t NRF24_get_status(void)
 void NRF24_begin(GPIO_TypeDef *nrf24PORT, uint16_t nrfCSN_Pin, uint16_t nrfCE_Pin, SPI_HandleTypeDef nrfSPI)
 {
 	//Copy SPI handle variable
-	memcpy(&nrf24_hspi, &nrfSPI, sizeof(nrfSPI));
+	memcpy(&nrf24_hspi, &hspi2, sizeof(hspi2));
 	//Copy Pins and Port variables
 	nrf24_PORT = nrf24PORT;
 	nrf24_CSN_PIN = nrfCSN_Pin;
@@ -762,10 +762,10 @@ void NRF24_ACTIVATE_cmd(void)
 	NRF24_csn(0);
 	cmdRxBuf[0] = CMD_ACTIVATE;
 	cmdRxBuf[1] = 0x73;
-	SPI_TxCplt = 0;
-	HAL_SPI_Transmit_IT(&hspi2, cmdRxBuf, 2);
-	while(!SPI_TxCplt){
-	}
+	//SPI_TxCplt = 0;
+	HAL_SPI_Transmit(&nrf24_hspi, cmdRxBuf, 2,2);
+//	while(!SPI_TxCplt){
+//	}
 
 	NRF24_csn(1);
 }
@@ -960,15 +960,15 @@ void printFIFOstatus(void)
 
 
 
-
-
-
-void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi){
-	SPI_TxCplt = 1;
-}
-
-
-
-void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi){
-	SPI_RxCplt = 1;
-}
+//
+//
+//
+//void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi){
+//	SPI_TxCplt = 1;
+//}
+//
+//
+//
+//void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi){
+//	SPI_RxCplt = 1;
+//}

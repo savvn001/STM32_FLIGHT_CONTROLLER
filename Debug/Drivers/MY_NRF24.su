@@ -53,5 +53,3 @@ MY_NRF24.c:905:6:printStatusReg	144	static
 MY_NRF24.c:921:6:printConfigReg	128	static
 MY_NRF24.c:939:6:nrf24_DebugUART_Init	8	static
 MY_NRF24.c:944:6:printFIFOstatus	136	static
-MY_NRF24.c:966:6:HAL_SPI_TxCpltCallback	0	static
-MY_NRF24.c:972:6:HAL_SPI_RxCpltCallback	0	static
