@@ -94,11 +94,11 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     /* USART6 interrupt Init */
 
     //NICK - have set pre emption priority to 5 so it's lower than the control loop
-    HAL_NVIC_SetPriority(USART6_IRQn, 10, 0);
+    HAL_NVIC_SetPriority(USART6_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(USART6_IRQn);
   /* USER CODE BEGIN USART6_MspInit 1 */
     // Enable RX idle interrupt, which we use to handle variable-length messages
-   // __HAL_UART_ENABLE_IT(uartHandle, UART_IT_IDLE);
+    __HAL_UART_ENABLE_IT(uartHandle, UART_IT_IDLE);
   /* USER CODE END USART6_MspInit 1 */
   }
 }
@@ -162,8 +162,7 @@ void HAL_UART_RxIdleCallback(UART_HandleTypeDef* huart)
     }
   }
 
- // RxIdleFlag = 1;
- // UART_timeout();
+  UART_timeout();
 
 }
 

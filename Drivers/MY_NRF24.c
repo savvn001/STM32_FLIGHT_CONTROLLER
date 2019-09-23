@@ -129,7 +129,7 @@ void NRF24_write_register(uint8_t reg, uint8_t value)
 	spiBuf[0] = reg|0x20;
 	spiBuf[1] = value;
 	//SPI_TxCplt = 0;
-	HAL_SPI_Transmit(&nrf24_hspi, spiBuf, 2,2);
+	HAL_SPI_Transmit(&nrf24_hspi, spiBuf, 2,10);
 //	while(!SPI_TxCplt){
 //	}
 	//Bring CSN high
@@ -183,11 +183,11 @@ void NRF24_read_payload(void* buf, uint8_t len)
 	NRF24_csn(0);
 	cmdRxBuf = CMD_R_RX_PAYLOAD;
 	//SPI_TxCplt = 0;
-	HAL_SPI_Transmit(&nrf24_hspi, &cmdRxBuf, 1,2);
+	HAL_SPI_Transmit(&nrf24_hspi, &cmdRxBuf, 1,10);
 //	while(!SPI_TxCplt){
 //	}
 	//SPI_RxCplt = 0;
-	HAL_SPI_Receive(&nrf24_hspi, buf, data_len,2);
+	HAL_SPI_Receive(&nrf24_hspi, buf, data_len,10);
 //	while(!SPI_RxCplt){
 //	}
 	NRF24_csn(1);
@@ -360,7 +360,7 @@ bool NRF24_read( void* buf, uint8_t len )
 	NRF24_read_payload( buf, len );
 	uint8_t rxStatus = NRF24_read_register(REG_FIFO_STATUS) & _BV(BIT_RX_EMPTY);
 	NRF24_flush_rx();
-	NRF24_getDynamicPayloadSize();
+	//NRF24_getDynamicPayloadSize();
 	return rxStatus;
 }
 //18. Open Tx pipe for writing (Cannot perform this while Listenning, has to call NRF24_stopListening)

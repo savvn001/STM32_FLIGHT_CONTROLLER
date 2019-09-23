@@ -18,8 +18,8 @@ MY_NRF24.c:406:6:NRF24_setChannel	8	static
 MY_NRF24.c:412:6:NRF24_setPayloadSize	0	static
 MY_NRF24.c:418:9:NRF24_getPayloadSize	0	static
 MY_NRF24.c:177:6:NRF24_read_payload	24	static
-MY_NRF24.c:423:9:NRF24_getDynamicPayloadSize	8	static
 MY_NRF24.c:358:6:NRF24_read	8	static
+MY_NRF24.c:423:9:NRF24_getDynamicPayloadSize	8	static
 MY_NRF24.c:455:6:NRF24_disableDynamicPayloads	8	static
 MY_NRF24.c:463:6:NRF24_isNRF_Plus	0	static
 MY_NRF24.c:468:6:NRF24_setAutoAck	8	static

@@ -31,6 +31,8 @@ char line[MINMEA_MAX_LENGTH];
 
 void GPS_parse();
 void parse_sentence();
+extern void getGPSData(uint8_t *ack_payload_1);
+
 
 struct GPS_ {
 
@@ -66,8 +68,6 @@ void GPS_init() {
 
 void UART_timeout() {
 
-	if (main_loop) {
-
 		//Check first element is a $
 		if (GPS_RX_Buffer[0] == 0x24) {
 
@@ -79,7 +79,7 @@ void UART_timeout() {
 		for (int i = 0; i < GPS_BUFFERSIZE; ++i) {
 			GPS_RX_Buffer[i] = 0;
 		}
-	}
+
 	//Begin receiving again
 	HAL_UART_Receive_DMA(&huart6, GPS_RX_Buffer, GPS_BUFFERSIZE);
 
