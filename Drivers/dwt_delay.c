@@ -69,10 +69,17 @@ void DWT_Delay(uint32_t us) // microseconds
  */
 void DWT_Delay(uint32_t us) // microseconds
 {
-    uint32_t startTick = DWT->CYCCNT,
-             delayTicks = us * (SystemCoreClock/1000000);
+    uint32_t startTick = DWT->CYCCNT, delayTicks = us * (SystemCoreClock/1000000);
 
     while (DWT->CYCCNT - startTick < delayTicks);
 }
+
+
+//uint32_t DWT_getMicros(){
+//
+//	uint32_t micros =
+//
+//	return;
+//}
 
 #endif

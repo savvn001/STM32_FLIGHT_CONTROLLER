@@ -25,7 +25,7 @@
 #include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
+/* USER CODE BEGIN Includes */     
 
 #include "../Drivers/GPS.h"
 #include  "controlLoop.h"
@@ -69,7 +69,7 @@ int print_buffer_index = 0;
 #define BATTERY 0
 
 //1 if using GPS module
-#define GPS 1
+#define GPS 0
 
 //Enable ONLY 1 of the two below
 //1 if using IMU (Kris winer MBED Library, fusion algorithm on MCU)
@@ -105,8 +105,7 @@ void StartGPSUpdate(void const * argument);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
 /* GetIdleTaskMemory prototype (linked to static allocation support) */
-void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer,
-		StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize);
+void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize );
 
 /* USER CODE BEGIN GET_IDLE_TASK_MEMORY */
 static StaticTask_t xIdleTaskTCBBuffer;
@@ -122,48 +121,48 @@ void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer,
 /* USER CODE END GET_IDLE_TASK_MEMORY */
 
 /**
- * @brief  FreeRTOS initialization
- * @param  None
- * @retval None
- */
+  * @brief  FreeRTOS initialization
+  * @param  None
+  * @retval None
+  */
 void MX_FREERTOS_Init(void) {
-	/* USER CODE BEGIN Init */
+  /* USER CODE BEGIN Init */
 
-	/* USER CODE END Init */
+  /* USER CODE END Init */
 
-	/* Create the mutex(es) */
-	/* definition and creation of GPSDataMutex */
-	osMutexDef(GPSDataMutex);
-	GPSDataMutexHandle = osMutexCreate(osMutex(GPSDataMutex));
+  /* Create the mutex(es) */
+  /* definition and creation of GPSDataMutex */
+  osMutexDef(GPSDataMutex);
+  GPSDataMutexHandle = osMutexCreate(osMutex(GPSDataMutex));
 
-	/* USER CODE BEGIN RTOS_MUTEX */
+  /* USER CODE BEGIN RTOS_MUTEX */
 	/* add mutexes, ... */
-	/* USER CODE END RTOS_MUTEX */
+  /* USER CODE END RTOS_MUTEX */
 
-	/* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
 	/* add semaphores, ... */
-	/* USER CODE END RTOS_SEMAPHORES */
+  /* USER CODE END RTOS_SEMAPHORES */
 
-	/* USER CODE BEGIN RTOS_TIMERS */
+  /* USER CODE BEGIN RTOS_TIMERS */
 	/* start timers, add new ones, ... */
-	/* USER CODE END RTOS_TIMERS */
+  /* USER CODE END RTOS_TIMERS */
 
-	/* USER CODE BEGIN RTOS_QUEUES */
+  /* USER CODE BEGIN RTOS_QUEUES */
 	/* add queues, ... */
-	/* USER CODE END RTOS_QUEUES */
+  /* USER CODE END RTOS_QUEUES */
 
-	/* Create the thread(s) */
-	/* definition and creation of ControlLoop */
-	osThreadDef(ControlLoop, StartControlLoop, osPriorityRealtime, 0, 1024);
-	ControlLoopHandle = osThreadCreate(osThread(ControlLoop), NULL);
+  /* Create the thread(s) */
+  /* definition and creation of ControlLoop */
+  osThreadDef(ControlLoop, StartControlLoop, osPriorityRealtime, 0, 1024);
+  ControlLoopHandle = osThreadCreate(osThread(ControlLoop), NULL);
 
-	/* definition and creation of GPSUpdate */
-	osThreadDef(GPSUpdate, StartGPSUpdate, osPriorityIdle, 0, 128);
-	GPSUpdateHandle = osThreadCreate(osThread(GPSUpdate), NULL);
+  /* definition and creation of GPSUpdate */
+  osThreadDef(GPSUpdate, StartGPSUpdate, osPriorityIdle, 0, 128);
+  GPSUpdateHandle = osThreadCreate(osThread(GPSUpdate), NULL);
 
-	/* USER CODE BEGIN RTOS_THREADS */
+  /* USER CODE BEGIN RTOS_THREADS */
 	/* add threads, ... */
-	/* USER CODE END RTOS_THREADS */
+  /* USER CODE END RTOS_THREADS */
 
 }
 
@@ -174,9 +173,10 @@ void MX_FREERTOS_Init(void) {
  * @retval None
  */
 /* USER CODE END Header_StartControlLoop */
-void StartControlLoop(void const * argument) {
+void StartControlLoop(void const * argument)
+{
 
-	/* USER CODE BEGIN StartControlLoop */
+  /* USER CODE BEGIN StartControlLoop */
 
 	CL_init();
 
@@ -184,9 +184,9 @@ void StartControlLoop(void const * argument) {
 	for (;;) {
 
 		CL_main();
-		osDelay(5);
+		osDelay(2);
 	}
-	/* USER CODE END StartControlLoop */
+  /* USER CODE END StartControlLoop */
 }
 
 /* USER CODE BEGIN Header_StartGPSUpdate */
@@ -196,8 +196,9 @@ void StartControlLoop(void const * argument) {
  * @retval None
  */
 /* USER CODE END Header_StartGPSUpdate */
-void StartGPSUpdate(void const * argument) {
-	/* USER CODE BEGIN StartGPSUpdate */
+void StartGPSUpdate(void const * argument)
+{
+  /* USER CODE BEGIN StartGPSUpdate */
 
 #if GPS
 
@@ -209,9 +210,9 @@ void StartGPSUpdate(void const * argument) {
 
 	/* Infinite loop */
 	for (;;) {
-		osDelay(1);
+		osDelay(10);
 	}
-	/* USER CODE END StartGPSUpdate */
+  /* USER CODE END StartGPSUpdate */
 }
 
 /* Private application code --------------------------------------------------*/

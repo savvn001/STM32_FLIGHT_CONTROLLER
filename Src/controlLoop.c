@@ -4,12 +4,12 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include "arm_math.h"
-
+#include "i2c.h"
+#include "tim.h"
 #include "../Drivers/IMU.h"
 
-#include "tim.h"
 
-
+#define IMU 1
 float imu_roll = 0;
 float imu_pitch = 0;
 float imu_yaw = 0;
@@ -56,20 +56,15 @@ void CL_init() {
 		//Start timer 11, used for integral calculations
 		HAL_TIM_Base_Start(&htim11);
 
-
 		if (imu_init(&hi2c2) == IMU_SUCCESS) {
 			imu_calibrate();
 		}
 
-		for (int i = 0; i < 31; ++i) {
-			AckPayload_0[i] = 0;
-			AckPayload_1[i] = 0;
 
-		}
 	#endif
 
 	/////////////////////////////////////////////////////////////////
-	////////////////////////// Init timers //////////////////////////
+	////////////////////////// Init timers for PWM //////////////////
 	/////////////////////////////////////////////////////////////////
 
 	//Start up PWMs
@@ -115,23 +110,10 @@ void CL_main() {
 
 
 #if IMU
-		//Calculate roll, pitch & yaw using IMU readings
-		tim11_count = htim11.Instance->CNT; //read TIM11 counter value, used for integral calculations
 
-		int tim1 = tim11_count;
-
-		calc_RollPitchYaw(tim11_count);
+		calc_RollPitchYaw(&imu_roll, &imu_pitch, &imu_yaw);
 
 
-		tim11_count = htim11.Instance->CNT; //read TIM11 counter value, used for integral calculations
-		int tim2 = tim11_count;
-
-		volatile int deltat = tim2-tim1;
-
-
-		imu_pitch = get_pitch();
-		imu_roll = get_roll();
-		imu_yaw = get_yaw();
 #endif
 		if (Rx_Data.airmode) {
 			/*******    Pitch PID calculation  ********/

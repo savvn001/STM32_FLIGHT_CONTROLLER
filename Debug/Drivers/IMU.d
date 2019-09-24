@@ -31,7 +31,8 @@ Drivers/IMU.o: ../Drivers/IMU.c ../Drivers/IMU.h \
  /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Inc/arm_math.h ../Drivers/CMSIS/Include/cmsis_compiler.h
+ ../Inc/arm_math.h ../Drivers/CMSIS/Include/cmsis_compiler.h ../Inc/tim.h \
+ ../Inc/main.h
 
 ../Drivers/IMU.h:
 
@@ -102,3 +103,7 @@ Drivers/IMU.o: ../Drivers/IMU.c ../Drivers/IMU.h \
 ../Inc/arm_math.h:
 
 ../Drivers/CMSIS/Include/cmsis_compiler.h:
+
+../Inc/tim.h:
+
+../Inc/main.h:

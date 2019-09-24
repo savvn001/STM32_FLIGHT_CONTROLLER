@@ -104,7 +104,7 @@ unsigned int new_conversion_processing(unsigned int new_data);
   * @retval int
   */
 int main(void)
-{
+ {
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */

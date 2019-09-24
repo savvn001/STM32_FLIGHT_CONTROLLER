@@ -24,7 +24,7 @@
 // above document; the MPU9250 and MPU9150 are virtually identical but the latter has a different register map
 //
 //Magnetometer Registers
-#define AK8963_ADDRESS   0x0C<<1
+#define AK8963_ADDRESS   0x0C
 #define WHO_AM_I_AK8963  0x00 // should return 0x48
 #define INFO             0x01
 #define AK8963_ST1       0x02  // data ready status bit 0
@@ -181,7 +181,7 @@ IMU_StatusTypeDef imu_init();
 
 IMU_StatusTypeDef imu_calibrate();
 
-void calc_RollPitchYaw(int counter_value);
+void calc_RollPitchYaw(float *roll, float *pitch, float *yaw);
 
 void printftest();
 /*
@@ -217,7 +217,7 @@ int16_t readTempData();
 
 void resetMPU9250();
 void initAK8963(float * destination);
-
+void magcalMPU9250(float * dest1);
 void initMPU9250();
 
 float get_roll();
