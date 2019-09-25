@@ -90,6 +90,8 @@ void CL_init() {
  *
  * For the QAV210 kit the orientation is as so:
  *
+ * 	    (Front)
+ *
  * (2 CCW)    (4 CW)
  *		\	  /
  *		   |
@@ -98,8 +100,6 @@ void CL_init() {
  *		/     \
  * (1 CW)     (3 CCW)
  *
- * This function gets called by the GPIO_EXTI callback when the PWM_RE_INT_Pin triggers an interrupt,
- * which is on the rising edge of every PWM pulse.
  */
 void CL_main() {
 
@@ -125,7 +125,7 @@ void CL_main() {
 
 			/*******    Yaw PID calculation  ********/
 
-			pid_output_yaw = pid_calculate_yaw(imu_yaw, 0, yaw_setpoint);
+			//pid_output_yaw = pid_calculate_yaw(imu_yaw, 0, yaw_setpoint);
 		} else {
 			pid_output_roll = 0;
 			pid_output_pitch = 0;

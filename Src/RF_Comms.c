@@ -26,7 +26,7 @@ uint16_t loop_counter = 0;
 uint16_t lastAvgBatteryLevel;
 int avgBatteryLevel = 0;
 
-
+float yaw_rx = 0;
 //////////////////////////////////// IMU variables /////////////////////////
 
 /////////////////////////////////////////////////////////////////
@@ -81,6 +81,11 @@ void RF_TxRx(uint16_t *throttle, float *p_setpoint, float *r_setpoint, float *y_
 		//Unpack the 32 byte payload from controller
 		unpackRxData();
 
+		//Reverse R joystick positions
+		Rx_Data.R_Joystick_YPos = 	4096 - Rx_Data.R_Joystick_YPos;
+		Rx_Data.R_Joystick_XPos = 	4096 - Rx_Data.R_Joystick_XPos;
+
+
 		//Map throttle joystick reading to ESC range
 		*throttle = map(Rx_Data.L_Joystick_YPos, 850, 3300, ESC_MIN, ESC_MAX);
 
@@ -95,10 +100,38 @@ void RF_TxRx(uint16_t *throttle, float *p_setpoint, float *r_setpoint, float *y_
 		}
 
 		//Map right joystick X axis to roll set point
-		*r_setpoint = map(Rx_Data.R_Joystick_XPos, 340, 3960, -MAX_ANGLE, MAX_ANGLE);
+		*r_setpoint = map(Rx_Data.R_Joystick_XPos, 350, 3940, -MAX_ANGLE, MAX_ANGLE);
+		*r_setpoint += 1;
+		//Clip just in case
+		if(*r_setpoint > MAX_ANGLE) *r_setpoint = (float) MAX_ANGLE;
+		if(*r_setpoint < -MAX_ANGLE) *r_setpoint = (float) -MAX_ANGLE;
 
 		//Map right joystick Y axis to roll set point
-		*p_setpoint = map(Rx_Data.R_Joystick_YPos, 350, 4000, -MAX_ANGLE, MAX_ANGLE);
+		*p_setpoint = map(Rx_Data.R_Joystick_YPos, 370, 3980, -MAX_ANGLE, MAX_ANGLE);
+		*p_setpoint += 1;
+		//Clip just in case
+		if(*p_setpoint > MAX_ANGLE) *p_setpoint = (float) MAX_ANGLE;
+		if(*p_setpoint < -MAX_ANGLE) *p_setpoint = (float) -MAX_ANGLE;
+
+
+		//Map left joystick X axis to yaw set point
+		#define	YAW_TURN_RATE 0.5
+
+		yaw_rx = map(Rx_Data.L_Joystick_XPos, 260, 3900, -YAW_TURN_RATE, YAW_TURN_RATE);
+
+		if(yaw_rx>YAW_TURN_RATE) {yaw_rx = YAW_TURN_RATE;}
+		if(yaw_rx<-YAW_TURN_RATE) {yaw_rx = -YAW_TURN_RATE;}
+
+		//make small deadzone
+		if(yaw_rx > -0.3 && yaw_rx < 0.3){ yaw_rx = 0.0000000f;}
+
+		if(yaw_rx > -YAW_TURN_RATE && yaw_rx < YAW_TURN_RATE){
+			(*y_setpoint) += yaw_rx;
+		}
+
+		//Clip yaw around 360 degree circle
+		if(*y_setpoint > 360) *y_setpoint = (float) 0;
+		if(*y_setpoint < 0) *y_setpoint = (float) 360;
 
 	} else {
 		packetsLostCtr++;
@@ -177,7 +210,7 @@ void packAckPayData_1() {
 }
 
 
-float map(int x, int in_min, int in_max, int out_min, int out_max) {
+float map(float x, float in_min, float in_max, float out_min, float out_max) {
 	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 

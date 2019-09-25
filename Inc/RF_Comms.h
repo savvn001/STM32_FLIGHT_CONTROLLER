@@ -31,7 +31,7 @@ void RF_TxRx(uint16_t *throttle, float *p_setpoint, float *r_setpoint, float *y_
 void unpackRxData();
 void packAckPayData_0(float roll, float pitch, float yaw);
 void packAckPayData_1();
-float map(int x, int in_min, int in_max, int out_min, int out_max);
+float map(float x, float in_min, float in_max, float out_min, float out_max);
 
 struct RX_Data_Str{
 
