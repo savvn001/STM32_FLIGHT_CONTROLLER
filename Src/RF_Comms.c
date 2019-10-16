@@ -10,7 +10,9 @@
 #include "../Drivers/dwt_delay.h"
 #include "spi.h"
 #include "math.h"
+#include "tim.h"
 
+#include "../Drivers/pid.h"
 //////////////////////////////////// NRF24 variables //////////////////////////////
 uint64_t TxpipeAddrs = 0x11223344AA;
 uint8_t RxData[32];
@@ -29,6 +31,30 @@ int avgBatteryLevel = 0;
 float yaw_rx = 0;
 //////////////////////////////////// IMU variables /////////////////////////
 
+
+void lostConnection();
+void kill();
+
+float roll_p_gain = 2.3;   //4.3
+float roll_i_gain = 0.6;   //0.6
+float roll_d_gain = 0.2;  //0.3
+
+float pitch_p_gain = 2.4;   //4.9
+float pitch_i_gain = 0.6;   //0.6
+float pitch_d_gain = 0.2;  //0.55
+
+float yaw_p_gain = 2.1;
+float yaw_i_gain = 0.02;
+float yaw_d_gain = 0;
+
+
+//float roll_p_gain = 0;  //5.2
+//float roll_i_gain = 0;  //1.5
+//float roll_d_gain = 0; //0.25
+
+//float pitch_p_gain = 0;   //2.5
+//float pitch_i_gain = 0;   //2.0
+//float pitch_d_gain = 0;  //0.42
 /////////////////////////////////////////////////////////////////
 ////////////////////// Init NRF24L01 Module /////////////////////
 /////////////////////////////////////////////////////////////////
@@ -44,11 +70,13 @@ void RF_init() {
 	NRF24_startListening();
 
 	printRadioSettings();
+
+	Rx_Data.kill_rx = 0;
 #endif
 
 }
 
-void RF_TxRx(uint16_t *throttle, float *p_setpoint, float *r_setpoint, float *y_setpoint, float roll, float pitch, float yaw) {
+uint16_t RF_TxRx(uint16_t *throttle, int *p_setpoint, int *r_setpoint, float *y_setpoint, float roll, float pitch, float yaw) {
 
 #if NRF24
 	//Pack acknowledge data 0 - sent every control loop
@@ -114,8 +142,10 @@ void RF_TxRx(uint16_t *throttle, float *p_setpoint, float *r_setpoint, float *y_
 		if(*p_setpoint < -MAX_ANGLE) *p_setpoint = (float) -MAX_ANGLE;
 
 
-		//Map left joystick X axis to yaw set point
-		#define	YAW_TURN_RATE 0.5
+		/** Map left joystick X axis to yaw set point **/
+
+		//Yaw setpoint is in °/sec so define max rate here
+#define	YAW_TURN_RATE 180
 
 		yaw_rx = map(Rx_Data.L_Joystick_XPos, 260, 3900, -YAW_TURN_RATE, YAW_TURN_RATE);
 
@@ -123,23 +153,23 @@ void RF_TxRx(uint16_t *throttle, float *p_setpoint, float *r_setpoint, float *y_
 		if(yaw_rx<-YAW_TURN_RATE) {yaw_rx = -YAW_TURN_RATE;}
 
 		//make small deadzone
-		if(yaw_rx > -0.3 && yaw_rx < 0.3){ yaw_rx = 0.0000000f;}
+		if(yaw_rx > -0.1 && yaw_rx < 0.1){ yaw_rx = 0.0000000f;}
 
-		if(yaw_rx > -YAW_TURN_RATE && yaw_rx < YAW_TURN_RATE){
-			(*y_setpoint) += yaw_rx;
-		}
-
-		//Clip yaw around 360 degree circle
-		if(*y_setpoint > 360) *y_setpoint = (float) 0;
-		if(*y_setpoint < 0) *y_setpoint = (float) 360;
+		(*y_setpoint) = yaw_rx;
 
 	} else {
 		packetsLostCtr++;
+
+		//Kill if lost connection
+		if(packetsLostCtr > 10){
+
+			kill();
+
+		}
+		return packetsLostCtr;
 	}
 
-	if (packetsLostCtr > 10) {
-		//lostConnection();
-	}
+	return 0;
 
 #endif
 }
@@ -155,19 +185,53 @@ void unpackRxData() {
 
 	Rx_Data.kill_rx = (RxData[8] >> 1) & 1;
 
-	if (Rx_Data.kill_rx) {
-		//kill();
+	if (Rx_Data.kill_rx && RxData[8] <= 0x03) {
+		kill();
 	}
 
 	//Unpack PID data
-	//	uint16_t roll_p_rx = (RxData[9] & 0xFF) | (RxData[10] << 8);
-	//	uint16_t roll_i_rx = (RxData[11] & 0xFF) | (RxData[12] << 8);
-	//	uint16_t roll_d_rx = (RxData[13] & 0xFF) | (RxData[14] << 8);
+	uint16_t p_rx = (RxData[9] & 0xFF) | (RxData[10] << 8);
+	uint16_t i_rx = (RxData[11] & 0xFF) | (RxData[12] << 8);
+	uint16_t d_rx = (RxData[13] & 0xFF) | (RxData[14] << 8);
 
-	//	//Remap
-	//	pitch_p_gain = (float) roll_p_rx / 100;
-	//	pitch_i_gain = (float) roll_i_rx / 100;
-	//	pitch_d_gain = (float) roll_d_rx / 100;
+	/*	Tune axis
+	 * 	0 = Roll
+	 * 	1 = Pitch
+	 * 	2 = Yaw
+	 */
+
+	int tune_axis = 3;
+
+	switch (tune_axis) {
+	case 0:
+
+		//Remap
+		roll_p_gain = (float) p_rx / 100;
+		roll_i_gain = (float) i_rx / 100;
+		roll_d_gain = (float) d_rx / 100;
+
+		break;
+
+	case 1:
+
+		//Remap
+		pitch_p_gain = (float) p_rx / 100;
+		pitch_i_gain = (float) i_rx / 100;
+		pitch_d_gain = (float) d_rx / 100;
+
+	case 2:
+
+		//Remap
+		yaw_p_gain = (float) p_rx / 100;
+		yaw_i_gain = (float) i_rx / 100;
+		yaw_d_gain = (float) d_rx / 100;
+
+
+	default:
+		break;
+	}
+
+
 
 }
 
@@ -209,6 +273,21 @@ void packAckPayData_1() {
 
 }
 
+
+/*
+ *  Kill function disables PWM outputs, turning off motors
+ */
+void kill() {
+	htim4.Instance->CCR1 = 1250;
+	htim4.Instance->CCR2 = 1250;
+	htim4.Instance->CCR3 = 1250;
+	htim4.Instance->CCR4 = 1250;
+
+	HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_1);
+	HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_2);
+	HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_3);
+	HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_4);
+}
 
 float map(float x, float in_min, float in_max, float out_min, float out_max) {
 	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;

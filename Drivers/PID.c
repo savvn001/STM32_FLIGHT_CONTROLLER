@@ -15,18 +15,20 @@
 /* Time of loop control loop configured as 500Hz, so
  * delta_t is the time period of this and used in the PID calculations as
  * the time difference between each sample point */
-#define delta_t 0.001970831691f
+#define delta_t 0.002f
 
 //PID gain values
-float roll_p_gain = 2.5;   //2.5
-float roll_i_gain = 2.0;   //2.0
-float roll_d_gain = 0.45;  //0.42
+extern float roll_p_gain;   //2.5
+extern float roll_i_gain;   //2.0
+extern float roll_d_gain;  //0.42
 
-float pitch_p_gain = 5.2;  //5.2
-float pitch_i_gain = 1.5;  //1.5
-float pitch_d_gain = 0.25; //0.25
+extern float pitch_p_gain;   //2.5
+extern float pitch_i_gain;   //2.0
+extern float pitch_d_gain;  //0.42
 
-
+extern float yaw_p_gain;
+extern float yaw_i_gain;
+extern float yaw_d_gain;
 
 
 /********************** Roll Axis PID control variables *****************************/
@@ -52,7 +54,7 @@ int roll_pid_clip = 1250;
 float pid_calculate_roll(float IMU_roll_value, int timer_value, float roll_setpoint) {
 
 	//Calculate error
-	roll_error = IMU_roll_value - roll_setpoint;
+	roll_error = roll_setpoint - IMU_roll_value;
 
 	//Proportional component
 	roll_p = roll_p_gain * roll_error;
@@ -110,7 +112,7 @@ int pitch_pid_clip = 1250;
 float pid_calculate_pitch(float IMU_pitch_value, int timer_value, float pitch_setpoint) {
 
 	//Calculate error
-	pitch_error = IMU_pitch_value - pitch_setpoint;
+	pitch_error = pitch_setpoint - IMU_pitch_value ;
 
 	//Proportional component
 	pitch_p = pitch_p_gain * pitch_error;
@@ -148,10 +150,6 @@ void reset_pid_pitch(){
 
 /********************** yaw Axis PID control variables *****************************/
 
-//PID gain values
-float yaw_p_gain = 9;
-float yaw_i_gain = 0.8;
-float yaw_d_gain = 1.0;
 
 float yaw_output_temp = 0;
 float yaw_error = 0;
@@ -165,13 +163,23 @@ int yaw_now = 0;
 int yaw_last_update = 0;
 float yaw_elapsed_time = 0;
 
-int yaw_pid_clip = 1250;
+int yaw_pid_clip = 600;
 
 /** yaw PID Calculation **/
 float pid_calculate_yaw(float IMU_yaw_value, int timer_value, float yaw_setpoint) {
 
 	//Calculate error
-	yaw_error = IMU_yaw_value - yaw_setpoint;
+	yaw_error = yaw_setpoint - IMU_yaw_value;
+
+
+//	//Account for discontinuity
+//	if(yaw_error > 180)
+//		yaw_error = yaw_error - 360;
+//	else if(yaw_error < -180)
+//		yaw_error = yaw_error + 360;
+//	else
+//		yaw_error = yaw_error;//do nothing
+
 
 	//Proportional component
 	yaw_p = yaw_p_gain * yaw_error;

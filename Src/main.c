@@ -104,7 +104,7 @@ unsigned int new_conversion_processing(unsigned int new_data);
   * @retval int
   */
 int main(void)
- {
+{
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -135,6 +135,7 @@ int main(void)
   MX_CRC_Init();
   MX_TIM11_Init();
   MX_USART6_UART_Init();
+  MX_TIM10_Init();
   /* USER CODE BEGIN 2 */
 
 
@@ -159,10 +160,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 	while (1) {
 
-//		if(RxIdleFlag){
-//
-//			UART_timeout();
-//			RxIdleFlag = 0;
 //		}
 
     /* USER CODE END WHILE */

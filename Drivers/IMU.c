@@ -139,7 +139,7 @@ IMU_StatusTypeDef imu_calibrate() {
 
 }
 
-void calc_RollPitchYaw(float *roll, float *pitch, float *yaw) {
+void calc_RollPitchYaw(float *roll, float *pitch, float *yaw, float *yaw_rate) {
 
 	//******* Get roll pitch & yaw values from registers (also from library example but adapted slightly) ********
 
@@ -147,7 +147,7 @@ void calc_RollPitchYaw(float *roll, float *pitch, float *yaw) {
 	if (readByte(MPU9250_ADDRESS_TX, MPU9250_ADDRESS_RX, INT_STATUS) & 0x01) { // On interrupt, check if data ready interrupt
 
 		readAccelData(accelCount);  // Read the x/y/z adc values
-		// Now we'll calculate the accleration value into actual g's
+		// Now we'll calculate the acceleration value into actual g's
 		ax = (float) accelCount[0] * aRes - accelBias[0]; // get actual g value, this depends on scale being set
 		ay = (float) accelCount[1] * aRes - accelBias[1];
 		az = (float) accelCount[2] * aRes - accelBias[2];
@@ -168,7 +168,15 @@ void calc_RollPitchYaw(float *roll, float *pitch, float *yaw) {
 		mx *= magscale[0];
 		my *= magscale[1];
 		mz *= magscale[2];
+
+		//Compensate for off centre IMU placement on X axis: https://www.basicairdata.eu/knowledge-center/compensation/inertial-measurement-unit-placement/
+		//0.34 = measured distance in M to centre of rotation of quad
+
+		//ax = ax + 0.034f* pow (  (gx*PI/180.0f), 2);
 	}
+
+	*yaw_rate = gz;
+
 
 	Now = htim11.Instance->CNT;
 
@@ -205,12 +213,13 @@ void calc_RollPitchYaw(float *roll, float *pitch, float *yaw) {
 	// Tait-Bryan angles as well as Euler angles are non-commutative; that is, the get the correct orientation the rotations must be
 	// applied in the correct order which for this configuration is yaw, pitch, and then roll.
 	// For more see http://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles which has additional links.
-	*yaw = atan2(2.0 * (q[1] * q[2] + q[0] * q[3]), q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]);
-	*pitch = -asin(2.0 * (q[1] * q[3] - q[0] * q[2]));
-	*roll = atan2(2.0 * (q[0] * q[1] + q[2] * q[3]), q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]);
+	*yaw = atan2f(2.0 * (q[1] * q[2] + q[0] * q[3]), q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]);
+	*pitch = -asinf(2.0 * (q[1] * q[3] - q[0] * q[2]));
+	*roll = atan2f(2.0 * (q[0] * q[1] + q[2] * q[3]), q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]);
 	*pitch *= 180.0 / PI;
 	*yaw *= 180.0 / PI;
-	*yaw -=  -1.1; // CHANGE-> (In Leeds, UK declination = -1.1) ... Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04 (+13.8)
+	*yaw -=  -0.6; // CHANGE-> (In Leeds, UK declination = -1.1) ... Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04 (+13.8)
+   // if(*yaw < 0) *yaw   += 360.0f; // Ensure yaw stays between 0 and 360
 	*roll *= 180.0 / PI;
 
 	sum = 0;

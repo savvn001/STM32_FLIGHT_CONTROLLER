@@ -23,6 +23,7 @@
 #include "task.h"
 #include "main.h"
 #include "cmsis_os.h"
+#include "tim.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */     
@@ -61,8 +62,7 @@ int print_buffer_index = 0;
 
 //////////////////////////////////// Peripheral defines  //////////////////////////////
 
-//1 if motors to be used
-#define MOTORS 0
+
 
 
 //1 if using battery
@@ -166,6 +166,9 @@ void MX_FREERTOS_Init(void) {
 
 }
 
+volatile int tim1;
+volatile int diff;
+volatile int tim2;
 /* USER CODE BEGIN Header_StartControlLoop */
 /**
  * @brief  Function implementing the ControlLoop thread.
@@ -179,11 +182,19 @@ void StartControlLoop(void const * argument)
   /* USER CODE BEGIN StartControlLoop */
 
 	CL_init();
+	HAL_TIM_Base_Start(&htim10);
 
 	/* Infinite loop */
 	for (;;) {
 
+		tim1 = htim10.Instance->CNT;
+
+		diff = tim1-tim2;
+
+		tim2 = tim1;
+
 		CL_main();
+		//2ms = 500Hz rate
 		osDelay(2);
 	}
   /* USER CODE END StartControlLoop */

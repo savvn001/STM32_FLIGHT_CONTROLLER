@@ -27,7 +27,7 @@
 #define MAX_ANGLE 20
 
 void RF_init();
-void RF_TxRx(uint16_t *throttle, float *p_setpoint, float *r_setpoint, float *y_setpoint, float roll, float pitch, float yaw);
+uint16_t RF_TxRx(uint16_t *throttle, int *p_setpoint, int *r_setpoint, float *y_setpoint, float roll, float pitch, float yaw);
 void unpackRxData();
 void packAckPayData_0(float roll, float pitch, float yaw);
 void packAckPayData_1();
