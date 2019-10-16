@@ -29,6 +29,22 @@ int avgBatteryLevel = 0;
 float yaw_rx = 0;
 //////////////////////////////////// IMU variables /////////////////////////
 
+
+//PID gain values
+float roll_p_gain;   //2.5
+float roll_i_gain;   //2.0
+float roll_d_gain;  //0.42
+
+float pitch_p_gain;  //5.2
+float pitch_i_gain;  //1.5
+float pitch_d_gain; //0.25
+
+//PID gain values
+float yaw_p_gain;
+float yaw_i_gain;
+float yaw_d_gain;
+
+
 /////////////////////////////////////////////////////////////////
 ////////////////////// Init NRF24L01 Module /////////////////////
 /////////////////////////////////////////////////////////////////
@@ -159,15 +175,35 @@ void unpackRxData() {
 		//kill();
 	}
 
-	//Unpack PID data
-	//	uint16_t roll_p_rx = (RxData[9] & 0xFF) | (RxData[10] << 8);
-	//	uint16_t roll_i_rx = (RxData[11] & 0xFF) | (RxData[12] << 8);
-	//	uint16_t roll_d_rx = (RxData[13] & 0xFF) | (RxData[14] << 8);
+		//Unpack PID data
+		uint16_t roll_p_rx = (RxData[9] & 0xFF) | (RxData[10] << 8);
+		uint16_t roll_i_rx = (RxData[11] & 0xFF) | (RxData[12] << 8);
+		uint16_t roll_d_rx = (RxData[13] & 0xFF) | (RxData[14] << 8);
 
-	//	//Remap
-	//	pitch_p_gain = (float) roll_p_rx / 100;
-	//	pitch_i_gain = (float) roll_i_rx / 100;
-	//	pitch_d_gain = (float) roll_d_rx / 100;
+		//Remap
+		roll_p_gain = (float) roll_p_rx / 1000;
+		roll_i_gain = (float) roll_i_rx / 1000;
+		roll_d_gain = (float) roll_d_rx / 1000;
+
+
+		uint16_t pitch_p_rx = (RxData[15] & 0xFF) | (RxData[16] << 8);
+		uint16_t pitch_i_rx = (RxData[17] & 0xFF) | (RxData[18] << 8);
+		uint16_t pitch_d_rx = (RxData[19] & 0xFF) | (RxData[20] << 8);
+
+		//Remap
+		pitch_p_gain = (float) pitch_p_rx / 1000;
+		pitch_i_gain = (float) pitch_i_rx / 1000;
+		pitch_d_gain = (float) pitch_d_rx / 1000;
+
+
+		uint16_t yaw_p_rx = (RxData[21] & 0xFF) | (RxData[22] << 8);
+		uint16_t yaw_i_rx = (RxData[23] & 0xFF) | (RxData[24] << 8);
+		uint16_t yaw_d_rx = (RxData[25] & 0xFF) | (RxData[26] << 8);
+
+		//Remap
+		yaw_p_gain = (float) yaw_p_rx / 1000;
+		yaw_i_gain = (float) yaw_i_rx / 1000;
+		yaw_d_gain = (float) yaw_d_rx / 1000;
 
 }
 

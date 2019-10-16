@@ -18,16 +18,18 @@
 #define delta_t 0.001970831691f
 
 //PID gain values
-float roll_p_gain = 2.5;   //2.5
-float roll_i_gain = 2.0;   //2.0
-float roll_d_gain = 0.45;  //0.42
+extern float roll_p_gain;   //2.5
+extern float roll_i_gain;   //2.0
+extern float roll_d_gain;  //0.42
 
-float pitch_p_gain = 5.2;  //5.2
-float pitch_i_gain = 1.5;  //1.5
-float pitch_d_gain = 0.25; //0.25
+extern float pitch_p_gain;  //5.2
+extern float pitch_i_gain;  //1.5
+extern float pitch_d_gain; //0.25
 
-
-
+//PID gain values
+extern float yaw_p_gain;
+extern float yaw_i_gain;
+extern float yaw_d_gain;
 
 /********************** Roll Axis PID control variables *****************************/
 
@@ -148,10 +150,7 @@ void reset_pid_pitch(){
 
 /********************** yaw Axis PID control variables *****************************/
 
-//PID gain values
-float yaw_p_gain = 9;
-float yaw_i_gain = 0.8;
-float yaw_d_gain = 1.0;
+
 
 float yaw_output_temp = 0;
 float yaw_error = 0;

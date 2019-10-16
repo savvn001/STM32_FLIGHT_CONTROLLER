@@ -1,6 +1,6 @@
-PID.c:52:7:pid_calculate_roll	0	static
-PID.c:80:6:reset_pid_roll	0	static
-PID.c:110:7:pid_calculate_pitch	0	static
-PID.c:138:6:reset_pid_pitch	0	static
-PID.c:171:7:pid_calculate_yaw	0	static
-PID.c:199:6:reset_pid_yaw	0	static
+PID.c:54:7:pid_calculate_roll	24	static
+PID.c:82:6:reset_pid_roll	4	static
+PID.c:112:7:pid_calculate_pitch	24	static
+PID.c:140:6:reset_pid_pitch	4	static
+PID.c:170:7:pid_calculate_yaw	24	static
+PID.c:198:6:reset_pid_yaw	4	static
