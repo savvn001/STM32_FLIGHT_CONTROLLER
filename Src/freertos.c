@@ -23,13 +23,13 @@
 #include "task.h"
 #include "main.h"
 #include "cmsis_os.h"
-#include "tim.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */     
 
 #include "../Drivers/GPS.h"
 #include  "controlLoop.h"
+#include "RF_Comms.h"
 
 /* USER CODE END Includes */
 
@@ -40,9 +40,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
-
-
 
 /** For debugging and tuning PID control, data storage buffer for
  *  printing afterwards to evaluate system response, can comment out later to save RAM
@@ -62,9 +59,6 @@ int print_buffer_index = 0;
 
 //////////////////////////////////// Peripheral defines  //////////////////////////////
 
-
-
-
 //1 if using battery
 #define BATTERY 0
 
@@ -76,6 +70,22 @@ int print_buffer_index = 0;
 #define IMU 1
 
 #define UART_DEBUG 0
+
+struct TxRxVars {
+
+	bool airmode;
+	uint16_t throttle;
+	float pitch_setpoint;
+	float roll_setpoint;
+	float yaw_setpoint;
+	float roll;
+	float pitch;
+	float yaw;
+
+};
+
+struct TxRxVars TxRx;
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -86,21 +96,23 @@ int print_buffer_index = 0;
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 
-
+xSemaphoreHandle PWM_Sem;
 
 /* USER CODE END Variables */
 osThreadId ControlLoopHandle;
 osThreadId GPSUpdateHandle;
+osThreadId NRF24Handle;
 osMutexId GPSDataMutexHandle;
+osMutexId RFDataMutexHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-
 
 /* USER CODE END FunctionPrototypes */
 
 void StartControlLoop(void const * argument);
 void StartGPSUpdate(void const * argument);
+void StartNRF24(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -135,15 +147,21 @@ void MX_FREERTOS_Init(void) {
   osMutexDef(GPSDataMutex);
   GPSDataMutexHandle = osMutexCreate(osMutex(GPSDataMutex));
 
+  /* definition and creation of RFDataMutex */
+  osMutexDef(RFDataMutex);
+  RFDataMutexHandle = osMutexCreate(osMutex(RFDataMutex));
+
   /* USER CODE BEGIN RTOS_MUTEX */
 	/* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
 	/* add semaphores, ... */
+	vSemaphoreCreateBinary(PWM_Sem);
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
+
 	/* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
@@ -157,18 +175,20 @@ void MX_FREERTOS_Init(void) {
   ControlLoopHandle = osThreadCreate(osThread(ControlLoop), NULL);
 
   /* definition and creation of GPSUpdate */
-  osThreadDef(GPSUpdate, StartGPSUpdate, osPriorityIdle, 0, 128);
+  osThreadDef(GPSUpdate, StartGPSUpdate, osPriorityNormal, 0, 128);
   GPSUpdateHandle = osThreadCreate(osThread(GPSUpdate), NULL);
+
+  /* definition and creation of NRF24 */
+  osThreadDef(NRF24, StartNRF24, osPriorityRealtime, 0, 1024);
+  NRF24Handle = osThreadCreate(osThread(NRF24), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
 	/* add threads, ... */
+
   /* USER CODE END RTOS_THREADS */
 
 }
 
-volatile int tim1;
-volatile int diff;
-volatile int tim2;
 /* USER CODE BEGIN Header_StartControlLoop */
 /**
  * @brief  Function implementing the ControlLoop thread.
@@ -178,22 +198,26 @@ volatile int tim2;
 /* USER CODE END Header_StartControlLoop */
 void StartControlLoop(void const * argument)
 {
-
   /* USER CODE BEGIN StartControlLoop */
 
 	CL_init();
-	HAL_TIM_Base_Start(&htim10);
+	//HAL_TIM_Base_Start(&htim10);
+	xSemaphoreGiveFromISR(PWM_Sem, NULL);
 
 	/* Infinite loop */
 	for (;;) {
 
-		tim1 = htim10.Instance->CNT;
+		main_loop = 1;
 
-		diff = tim1-tim2;
+		if (xSemaphoreTake(PWM_Sem, portMAX_DELAY)) {
 
-		tim2 = tim1;
+			xSemaphoreTake(RFDataMutexHandle, portMAX_DELAY);
+			CL_main(TxRx.airmode, TxRx.throttle, TxRx.pitch_setpoint,
+					TxRx.roll_setpoint, TxRx.yaw_setpoint, &TxRx.roll,
+					&TxRx.pitch, &TxRx.yaw);
+			xSemaphoreGive(RFDataMutexHandle);
+		}
 
-		CL_main();
 		//2ms = 500Hz rate
 		osDelay(2);
 	}
@@ -217,28 +241,39 @@ void StartGPSUpdate(void const * argument)
 
 #endif
 
-
-
 	/* Infinite loop */
 	for (;;) {
-		osDelay(10);
+		osDelay(1);
 	}
   /* USER CODE END StartGPSUpdate */
 }
 
+/* USER CODE BEGIN Header_StartNRF24 */
+/**
+ * @brief Function implementing the NRF24 thread.
+ * @param argument: Not used
+ * @retval None
+ */
+/* USER CODE END Header_StartNRF24 */
+void StartNRF24(void const * argument)
+{
+  /* USER CODE BEGIN StartNRF24 */
+
+	RF_init();
+	/* Infinite loop */
+	for (;;) {
+
+		xSemaphoreTake(RFDataMutexHandle, portMAX_DELAY);
+		RF_TxRx(&TxRx.airmode, &TxRx.throttle, &TxRx.pitch_setpoint,
+				&TxRx.roll_setpoint, &TxRx.yaw_setpoint, TxRx.roll, TxRx.pitch,
+				TxRx.yaw);
+	    xSemaphoreGive(RFDataMutexHandle);
+		}
+  /* USER CODE END StartNRF24 */
+}
+
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
-
-
-
-
-
-
-
-
-
-
-
 
 #if UART_DEBUG
 
@@ -283,22 +318,22 @@ void printToPC() {
 }
 
 //////GPIO interrupt callback
-//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-//
-//	//GPIO pin configured to capture rising edge interrupt of PWM signals
-//	if (GPIO_Pin == PWM_INT_Pin && main_loop) {
-//		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
-//
-//		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
-//	}
-//
-//	//	if (GPIO_Pin == kill_Pin && main_loop) {
-//	//		//kill();
-//	//	}
-//
-//}
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
+	//GPIO pin configured to capture rising edge interrupt of PWM signals
+	if (GPIO_Pin == PWM_INT_Pin && main_loop) {
 
+		xSemaphoreGiveFromISR(PWM_Sem, NULL);
+		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
+
+		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_3);
+	}
+
+	//	if (GPIO_Pin == kill_Pin && main_loop) {
+	//		//kill();
+	//	}
+
+}
 
 #if GPS
 
@@ -331,7 +366,6 @@ void printToPC() {
 
 
 #endif
-
 
 /* USER CODE END Application */
 

@@ -8,6 +8,7 @@
 #include "tim.h"
 #include "../Drivers/IMU.h"
 
+
 #define IMU 1
 //1 if motors to be used
 #define MOTORS 1
@@ -47,14 +48,11 @@ float gx, gy, gz;
 float mx, my, mz;
 float temp;
 
+
+
+
+
 void CL_init() {
-
-#if NRF24
-
-	RF_init();
-
-#endif
-
 #if IMU
 
 	//Start timer 11, used for integral calculations
@@ -78,10 +76,10 @@ void CL_init() {
 
 	//ARM_ESCs(); //Force arming sequence
 
-	PWM1_Set(2500);
-	PWM2_Set(2500);
-	PWM3_Set(2500);
-	PWM4_Set(2500);
+//	PWM1_Set(2500);
+//	PWM2_Set(2500);
+//	PWM3_Set(2500);
+//	PWM4_Set(2500);
 
 }
 
@@ -106,22 +104,18 @@ bool done = 0;
  * (1 CW)     (3 CCW)
  *
  */
-void CL_main() {
-
-#if NRF24
+void CL_main(bool airmode, uint16_t throttle, float pitch_setpoint, float roll_setpoint, float yaw_setpoint, float *roll, float *pitch, float *yaw ) {
 
 
-	RF_TxRx(&throttle, &pitch_setpoint, &roll_setpoint, &yaw_setpoint, imu_roll,
-			imu_pitch, imu_yaw);
-#endif
+
 
 #if IMU
 
-	calc_RollPitchYaw(&imu_roll, &imu_pitch, &imu_yaw, &imu_yaw_rate);
+	calc_RollPitchYaw(&imu_roll, pitch, NULL, yaw);
 
 
 #endif
-	if (Rx_Data.airmode && throttle > 1250) {
+	if (airmode && throttle > 1250) {
 		/*******    Pitch PID calculation  ********/
 		pid_output_pitch = pid_calculate_pitch(imu_pitch, 0, pitch_setpoint);
 
@@ -193,6 +187,9 @@ void CL_main() {
 
 #endif
 
+		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_5);
+
+
 }
 
 
@@ -204,6 +201,7 @@ void CL_main() {
  */
 void lostConnection() {
 
+	/*
 	//Force airmode
 	Rx_Data.airmode = 1;
 
@@ -219,7 +217,7 @@ void lostConnection() {
 		//Then turn off motors fully to be sure
 		kill();
 	}
-
+*/
 }
 
 /*

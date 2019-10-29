@@ -12,6 +12,8 @@
 #include "math.h"
 #include "tim.h"
 
+extern UART_HandleTypeDef huart6;
+
 #include "../Drivers/pid.h"
 //////////////////////////////////// NRF24 variables //////////////////////////////
 uint64_t TxpipeAddrs = 0x11223344AA;
@@ -31,30 +33,21 @@ int avgBatteryLevel = 0;
 float yaw_rx = 0;
 //////////////////////////////////// IMU variables /////////////////////////
 
-
 void lostConnection();
 void kill();
 
-float roll_p_gain = 2.3;   //4.3
-float roll_i_gain = 0.6;   //0.6
-float roll_d_gain = 0.2;  //0.3
+float roll_p_gain;   //4.3
+float roll_i_gain;   //0.6
+float roll_d_gain;  //0.3
 
-float pitch_p_gain = 2.4;   //4.9
-float pitch_i_gain = 0.6;   //0.6
-float pitch_d_gain = 0.2;  //0.55
+float pitch_p_gain;   //4.9
+float pitch_i_gain;   //0.6
+float pitch_d_gain;  //0.55
 
-float yaw_p_gain = 2.1;
-float yaw_i_gain = 0.02;
-float yaw_d_gain = 0;
+float yaw_p_gain;
+float yaw_i_gain;
+float yaw_d_gain;
 
-
-//float roll_p_gain = 0;  //5.2
-//float roll_i_gain = 0;  //1.5
-//float roll_d_gain = 0; //0.25
-
-//float pitch_p_gain = 0;   //2.5
-//float pitch_i_gain = 0;   //2.0
-//float pitch_d_gain = 0;  //0.42
 /////////////////////////////////////////////////////////////////
 ////////////////////// Init NRF24L01 Module /////////////////////
 /////////////////////////////////////////////////////////////////
@@ -63,7 +56,7 @@ void RF_init() {
 #if NRF24
 	DWT_Init(); //Enable some of the MCUs special registers so we can get microsecond (us) delays
 	NRF24_begin(GPIOB, nrf_CSN_PIN, nrf_CE_PIN, hspi2);
-	//nrf24_DebugUART_Init(huart6);
+	nrf24_DebugUART_Init(huart6);
 	NRF24_enableAckPayload();
 	NRF24_setAutoAck(true);
 	NRF24_openReadingPipe(1, TxpipeAddrs);
@@ -72,29 +65,40 @@ void RF_init() {
 	printRadioSettings();
 
 	Rx_Data.kill_rx = 0;
+
+	for (int i = 0; i < 32; ++i) {
+
+		RxData[i] = 0;
+		AckPayload_0[i] = 0;
+		AckPayload_1[i] = 0;
+	}
 #endif
 
 }
 
-uint16_t RF_TxRx(uint16_t *throttle, int *p_setpoint, int *r_setpoint, float *y_setpoint, float roll, float pitch, float yaw) {
+uint16_t RF_TxRx(bool *airmode, uint16_t *throttle, float *p_setpoint,
+		float *r_setpoint, float *y_setpoint, float roll, float pitch,
+		float yaw) {
 
 #if NRF24
-	//Pack acknowledge data 0 - sent every control loop
-	packAckPayData_0(roll, pitch, yaw);
 
-	//Pack acknowledge data 1 - sent every second
-	if (loop_counter == CRTL_LOOP_FREQ - 1) {
-		packAckPayData_1();
-		loop_counter = 0;
-	} else {
-		loop_counter++;
-	}
+	/*
+	 //Pack acknowledge data 1 - sent every second
+	 if (loop_counter == CRTL_LOOP_FREQ - 1) {
+	 packAckPayData_1();
+	 loop_counter = 0;
+	 } else {
+	 loop_counter++;
+	 }
+	 */
 
-	//	HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_6);
 
 	/* Get data from receiver */
 	if (NRF24_available()) {
 		NRF24_read(RxData, 32);
+
+		//Pack acknowledge data 0 - sent every control loop
+		packAckPayData_0(roll, pitch, yaw);
 
 		packetsLostCtr = 0;
 
@@ -106,13 +110,13 @@ uint16_t RF_TxRx(uint16_t *throttle, int *p_setpoint, int *r_setpoint, float *y_
 			NRF24_writeAckPayload(1, AckPayload_0, 32);
 
 		}
+
 		//Unpack the 32 byte payload from controller
 		unpackRxData();
 
 		//Reverse R joystick positions
-		Rx_Data.R_Joystick_YPos = 	4096 - Rx_Data.R_Joystick_YPos;
-		Rx_Data.R_Joystick_XPos = 	4096 - Rx_Data.R_Joystick_XPos;
-
+		Rx_Data.R_Joystick_YPos = 4096 - Rx_Data.R_Joystick_YPos;
+		Rx_Data.R_Joystick_XPos = 4096 - Rx_Data.R_Joystick_XPos;
 
 		//Map throttle joystick reading to ESC range
 		*throttle = map(Rx_Data.L_Joystick_YPos, 850, 3300, ESC_MIN, ESC_MAX);
@@ -128,32 +132,44 @@ uint16_t RF_TxRx(uint16_t *throttle, int *p_setpoint, int *r_setpoint, float *y_
 		}
 
 		//Map right joystick X axis to roll set point
-		*r_setpoint = map(Rx_Data.R_Joystick_XPos, 350, 3940, -MAX_ANGLE, MAX_ANGLE);
+		*r_setpoint = map(Rx_Data.R_Joystick_XPos, 350, 3940, -MAX_ANGLE,
+		MAX_ANGLE);
 		*r_setpoint += 1;
 		//Clip just in case
-		if(*r_setpoint > MAX_ANGLE) *r_setpoint = (float) MAX_ANGLE;
-		if(*r_setpoint < -MAX_ANGLE) *r_setpoint = (float) -MAX_ANGLE;
+		if (*r_setpoint > MAX_ANGLE)
+			*r_setpoint = (float) MAX_ANGLE;
+		if (*r_setpoint < -MAX_ANGLE)
+			*r_setpoint = (float) -MAX_ANGLE;
 
 		//Map right joystick Y axis to roll set point
-		*p_setpoint = map(Rx_Data.R_Joystick_YPos, 370, 3980, -MAX_ANGLE, MAX_ANGLE);
-		*p_setpoint += 1;
-		//Clip just in case
-		if(*p_setpoint > MAX_ANGLE) *p_setpoint = (float) MAX_ANGLE;
-		if(*p_setpoint < -MAX_ANGLE) *p_setpoint = (float) -MAX_ANGLE;
+		*p_setpoint = map(Rx_Data.R_Joystick_YPos, 370, 3980, -MAX_ANGLE,
+		MAX_ANGLE);
 
+		//Clip just in case
+		if (*p_setpoint > MAX_ANGLE)
+			*p_setpoint = (float) MAX_ANGLE;
+		if (*p_setpoint < -MAX_ANGLE)
+			*p_setpoint = (float) -MAX_ANGLE;
 
 		/** Map left joystick X axis to yaw set point **/
 
 		//Yaw setpoint is in °/sec so define max rate here
 #define	YAW_TURN_RATE 180
 
-		yaw_rx = map(Rx_Data.L_Joystick_XPos, 260, 3900, -YAW_TURN_RATE, YAW_TURN_RATE);
+		yaw_rx = map(Rx_Data.L_Joystick_XPos, 260, 3900, -YAW_TURN_RATE,
+		YAW_TURN_RATE);
 
-		if(yaw_rx>YAW_TURN_RATE) {yaw_rx = YAW_TURN_RATE;}
-		if(yaw_rx<-YAW_TURN_RATE) {yaw_rx = -YAW_TURN_RATE;}
+		if (yaw_rx > YAW_TURN_RATE) {
+			yaw_rx = YAW_TURN_RATE;
+		}
+		if (yaw_rx < -YAW_TURN_RATE) {
+			yaw_rx = -YAW_TURN_RATE;
+		}
 
 		//make small deadzone
-		if(yaw_rx > -0.1 && yaw_rx < 0.1){ yaw_rx = 0.0000000f;}
+		if (yaw_rx > -0.1 && yaw_rx < 0.1) {
+			yaw_rx = 0.0000000f;
+		}
 
 		(*y_setpoint) = yaw_rx;
 
@@ -161,11 +177,11 @@ uint16_t RF_TxRx(uint16_t *throttle, int *p_setpoint, int *r_setpoint, float *y_
 		packetsLostCtr++;
 
 		//Kill if lost connection
-		if(packetsLostCtr > 10){
-
-			kill();
-
-		}
+//		if (packetsLostCtr > 800) {
+//
+//			kill();
+//
+//		}
 		return packetsLostCtr;
 	}
 
@@ -190,48 +206,74 @@ void unpackRxData() {
 	}
 
 	//Unpack PID data
-	uint16_t p_rx = (RxData[9] & 0xFF) | (RxData[10] << 8);
-	uint16_t i_rx = (RxData[11] & 0xFF) | (RxData[12] << 8);
-	uint16_t d_rx = (RxData[13] & 0xFF) | (RxData[14] << 8);
+	uint16_t roll_p_rx = (RxData[9] & 0xFF) | (RxData[10] << 8);
+	uint16_t roll_i_rx = (RxData[11] & 0xFF) | (RxData[12] << 8);
+	uint16_t roll_d_rx = (RxData[13] & 0xFF) | (RxData[14] << 8);
 
-	/*	Tune axis
-	 * 	0 = Roll
-	 * 	1 = Pitch
-	 * 	2 = Yaw
-	 */
+	//Remap
+	roll_p_gain = (float) roll_p_rx / 1000;
+	roll_i_gain = (float) roll_i_rx / 1000;
+	roll_d_gain = (float) roll_d_rx / 1000;
 
-	int tune_axis = 3;
+	uint16_t pitch_p_rx = (RxData[15] & 0xFF) | (RxData[16] << 8);
+	uint16_t pitch_i_rx = (RxData[17] & 0xFF) | (RxData[18] << 8);
+	uint16_t pitch_d_rx = (RxData[19] & 0xFF) | (RxData[20] << 8);
 
-	switch (tune_axis) {
-	case 0:
+	//Remap
+	pitch_p_gain = (float) pitch_p_rx / 1000;
+	pitch_i_gain = (float) pitch_i_rx / 1000;
+	pitch_d_gain = (float) pitch_d_rx / 1000;
 
-		//Remap
-		roll_p_gain = (float) p_rx / 100;
-		roll_i_gain = (float) i_rx / 100;
-		roll_d_gain = (float) d_rx / 100;
+	uint16_t yaw_p_rx = (RxData[21] & 0xFF) | (RxData[22] << 8);
+	uint16_t yaw_i_rx = (RxData[23] & 0xFF) | (RxData[24] << 8);
+	uint16_t yaw_d_rx = (RxData[25] & 0xFF) | (RxData[26] << 8);
 
-		break;
+	//Remap
+	yaw_p_gain = (float) yaw_p_rx / 1000;
+	yaw_i_gain = (float) yaw_i_rx / 1000;
+	yaw_d_gain = (float) yaw_d_rx / 1000;
 
-	case 1:
-
-		//Remap
-		pitch_p_gain = (float) p_rx / 100;
-		pitch_i_gain = (float) i_rx / 100;
-		pitch_d_gain = (float) d_rx / 100;
-
-	case 2:
-
-		//Remap
-		yaw_p_gain = (float) p_rx / 100;
-		yaw_i_gain = (float) i_rx / 100;
-		yaw_d_gain = (float) d_rx / 100;
-
-
-	default:
-		break;
-	}
-
-
+//	//Unpack PID data
+//	uint16_t p_rx = (RxData[9] & 0xFF) | (RxData[10] << 8);
+//	uint16_t i_rx = (RxData[11] & 0xFF) | (RxData[12] << 8);
+//	uint16_t d_rx = (RxData[13] & 0xFF) | (RxData[14] << 8);
+//
+//	/*	Tune axis
+//	 * 	0 = Roll
+//	 * 	1 = Pitch
+//	 * 	2 = Yaw
+//	 */
+//
+//	uint8_t tune_axis = RxData[15];
+//
+//	switch (tune_axis) {
+//	case 0:
+//
+//		//Remap
+//		roll_p_gain = (float) p_rx / 1000;
+//		roll_i_gain = (float) i_rx / 1000;
+//		roll_d_gain = (float) d_rx / 1000;
+//
+//		break;
+//
+//	case 1:
+//
+//		//Remap
+//		pitch_p_gain = (float) p_rx / 1000;
+//		pitch_i_gain = (float) i_rx / 1000;
+//		pitch_d_gain = (float) d_rx / 1000;
+//
+//	case 2:
+//
+//		//Remap
+//		yaw_p_gain = (float) p_rx / 1000;
+//		yaw_i_gain = (float) i_rx / 1000;
+//		yaw_d_gain = (float) d_rx / 1000;
+//
+//
+//	default:
+//		break;
+//	}
 
 }
 
@@ -272,7 +314,6 @@ void packAckPayData_1() {
 	getGPSData(AckPayload_1);
 
 }
-
 
 /*
  *  Kill function disables PWM outputs, turning off motors

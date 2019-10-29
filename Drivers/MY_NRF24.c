@@ -22,7 +22,7 @@ References:				This library was written based on the Arduino NRF24 Open-Source l
 #include "dwt_delay.h"
 //#include <stdio.h>
 
-extern SPI_HandleTypeDef hspi2;
+
 //*** Variables declaration ***//
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -215,7 +215,7 @@ uint8_t NRF24_get_status(void)
 void NRF24_begin(GPIO_TypeDef *nrf24PORT, uint16_t nrfCSN_Pin, uint16_t nrfCE_Pin, SPI_HandleTypeDef nrfSPI)
 {
 	//Copy SPI handle variable
-	memcpy(&nrf24_hspi, &hspi2, sizeof(hspi2));
+	memcpy(&nrf24_hspi, &nrfSPI, sizeof(nrfSPI));
 	//Copy Pins and Port variables
 	nrf24_PORT = nrf24PORT;
 	nrf24_CSN_PIN = nrfCSN_Pin;
@@ -265,7 +265,7 @@ void NRF24_begin(GPIO_TypeDef *nrf24PORT, uint16_t nrfCSN_Pin, uint16_t nrfCE_Pi
 	//Initialise PA level to max (0dB)
 	NRF24_setPALevel(RF24_PA_m6dB);
 	//Initialise data rate to 1Mbps
-	NRF24_setDataRate(RF24_1MBPS);
+	NRF24_setDataRate(RF24_2MBPS);
 	//Initalise CRC length to 16-bit (2 bytes)
 	NRF24_setCRCLength(RF24_CRC_16);
 	//Disable dynamic payload
@@ -281,7 +281,7 @@ void NRF24_begin(GPIO_TypeDef *nrf24PORT, uint16_t nrfCSN_Pin, uint16_t nrfCE_Pi
 	//Reset status register
 	NRF24_resetStatus();
 	//Initialise channel to 76
-	NRF24_setChannel(76);
+	NRF24_setChannel(56);
 	//Flush buffers
 	NRF24_flush_tx();
 	NRF24_flush_rx();

@@ -16,17 +16,19 @@
 //Value of ADC reading that corresponds to around 11.5V - will shut off to protect battery (3S)
 #define ADC_BATTERY_SHUTOFF 3545
 
-
+#define ESC_MIN 1250
+#define ESC_MAX 2500
 
 #include <stdio.h>
 #include <stdbool.h>
-#include "RF_Comms.h"
+
+extern struct RxTxVars_ RxTxVarsMain;
 
 
 
 ////////////////////////// "Public" functions ////////////////////////
 void CL_init();
-void CL_main();
+void CL_main(bool airmode, uint16_t throttle, float pitch_setpoint, float roll_setpoint, float yaw_setpoint, float *roll, float *pitch, float *yaw);
 
 
 //////////////////////// "Private" functions ////////////////////////

@@ -44,14 +44,15 @@
 
 /* USER CODE BEGIN Includes */   	      
 /* Section where include file can be added */
+#define configUSE_TRACE_FACILITY 1
+
 /* USER CODE END Includes */ 
 
-/* Ensure stdint is only used by the compiler, and not the assembler. */
+/* Ensure definitions are only used by the compiler, and not by the assembler. */
 #if defined(__ICCARM__) || defined(__CC_ARM) || defined(__GNUC__)
-    #include <stdint.h>
-    extern uint32_t SystemCoreClock;
+  #include <stdint.h>
+  extern uint32_t SystemCoreClock;
 #endif
-
 #define configUSE_PREEMPTION                     1
 #define configSUPPORT_STATIC_ALLOCATION          1
 #define configSUPPORT_DYNAMIC_ALLOCATION         1
@@ -121,10 +122,16 @@ standard names. */
 
 /* IMPORTANT: This define is commented when used with STM32Cube firmware, when the timebase source is SysTick,
               to prevent overwriting SysTick_Handler defined within STM32Cube HAL */
+ 
 #define xPortSysTickHandler SysTick_Handler
 
 /* USER CODE BEGIN Defines */   	      
 /* Section where parameter definitions can be added (for instance, to override default ones in FreeRTOS.h) */
+  /* Integrates the Tracealyzer recorder with FreeRTOS */
+  #if ( configUSE_TRACE_FACILITY == 1 )
+  	#include "trcRecorder.h"
+  #endif
+
 /* USER CODE END Defines */ 
 
 #endif /* FREERTOS_CONFIG_H */

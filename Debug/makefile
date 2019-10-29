@@ -59,8 +59,8 @@ STM32_FLIGHT_CONTROLLER.list \
 all: STM32_FLIGHT_CONTROLLER.elf secondary-outputs
 
 # Tool invocations
-STM32_FLIGHT_CONTROLLER.elf: $(OBJS) $(USER_OBJS) /Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/STM32F411RETX_FLASH.ld
-	arm-none-eabi-g++ -o "STM32_FLIGHT_CONTROLLER.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"/Users/nick_savva/STM32CubeIDE/workspace_1.0.1/STM32_FLIGHT_CONTROLLER/STM32F411RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="STM32_FLIGHT_CONTROLLER.map" -Wl,--gc-sections -static -u _printf_float --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -u _scanf_float -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group
+STM32_FLIGHT_CONTROLLER.elf: $(OBJS) $(USER_OBJS) C:\Users\el15ns\STM32CubeIDE\workspace_1.0.2\STM32_FLIGHT_CONTROLLER\STM32F411RETX_FLASH.ld
+	arm-none-eabi-g++ -o "STM32_FLIGHT_CONTROLLER.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\el15ns\STM32CubeIDE\workspace_1.0.2\STM32_FLIGHT_CONTROLLER\STM32F411RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="STM32_FLIGHT_CONTROLLER.map" -Wl,--gc-sections -static -u _printf_float --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -u _scanf_float -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

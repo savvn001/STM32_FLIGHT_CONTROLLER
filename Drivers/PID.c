@@ -15,7 +15,7 @@
 /* Time of loop control loop configured as 500Hz, so
  * delta_t is the time period of this and used in the PID calculations as
  * the time difference between each sample point */
-#define delta_t 0.002f
+#define delta_t 0.0019731651278991f
 
 //PID gain values
 extern float roll_p_gain;   //2.5

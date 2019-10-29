@@ -349,7 +349,7 @@ void readGyroData(int16_t * destination) {
 
 void readMagData(int16_t * destination) {
 	uint8_t rawData[7]; // x/y/z gyro register data, ST2 register stored here, must read ST2 at end of data acquisition
-	if (readByte(AK8963_ADDRESS_TX, AK8963_ADDRESS_RX, AK8963_ST1) & 0x01) { // wait for magnetometer data ready bit to be set
+	//if (readByte(AK8963_ADDRESS_TX, AK8963_ADDRESS_RX, AK8963_ST1) & 0x01) { // wait for magnetometer data ready bit to be set
 
 		readBytes(AK8963_ADDRESS_TX, AK8963_ADDRESS_RX, AK8963_XOUT_L, 7, &rawData[0]); // Read the six raw data and ST2 registers sequentially into data array
 		uint8_t c = rawData[6]; // End data read by reading ST2 register
@@ -361,7 +361,7 @@ void readMagData(int16_t * destination) {
 			destination[2] =
 					(int16_t) (((int16_t) rawData[5] << 8) | rawData[4]);
 		}
-	}
+	//}
 }
 
 int16_t readTempData() {
