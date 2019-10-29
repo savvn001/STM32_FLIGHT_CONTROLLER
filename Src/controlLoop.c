@@ -111,7 +111,7 @@ void CL_main(bool airmode, uint16_t throttle, float pitch_setpoint, float roll_s
 
 #if IMU
 
-	calc_RollPitchYaw(&imu_roll, pitch, NULL, yaw);
+	calc_RollPitchYaw(roll, pitch, NULL, yaw);
 
 
 #endif

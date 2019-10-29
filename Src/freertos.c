@@ -83,8 +83,10 @@ struct TxRxVars {
 	float yaw;
 
 };
-
 struct TxRxVars TxRx;
+
+
+xQueueHandle RadioData_To_CL_Queue = 0;
 
 /* USER CODE END PD */
 
@@ -167,6 +169,7 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_QUEUES */
 	/* add queues, ... */
+	RadioData_To_CL_Queue = xQueueCreate(8, sizeof(struct TxRxVars));
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -179,7 +182,7 @@ void MX_FREERTOS_Init(void) {
   GPSUpdateHandle = osThreadCreate(osThread(GPSUpdate), NULL);
 
   /* definition and creation of NRF24 */
-  osThreadDef(NRF24, StartNRF24, osPriorityRealtime, 0, 1024);
+  osThreadDef(NRF24, StartNRF24, osPriorityHigh, 0, 1024);
   NRF24Handle = osThreadCreate(osThread(NRF24), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -210,6 +213,9 @@ void StartControlLoop(void const * argument)
 		main_loop = 1;
 
 		if (xSemaphoreTake(PWM_Sem, portMAX_DELAY)) {
+
+			//xQueueReceive(RadioData_To_CL_Queue, &(TxRx), 1);
+
 
 			xSemaphoreTake(RFDataMutexHandle, portMAX_DELAY);
 			CL_main(TxRx.airmode, TxRx.throttle, TxRx.pitch_setpoint,
@@ -243,7 +249,7 @@ void StartGPSUpdate(void const * argument)
 
 	/* Infinite loop */
 	for (;;) {
-		osDelay(1);
+		osDelay(10);
 	}
   /* USER CODE END StartGPSUpdate */
 }
@@ -258,7 +264,6 @@ void StartGPSUpdate(void const * argument)
 void StartNRF24(void const * argument)
 {
   /* USER CODE BEGIN StartNRF24 */
-
 	RF_init();
 	/* Infinite loop */
 	for (;;) {
@@ -267,6 +272,8 @@ void StartNRF24(void const * argument)
 		RF_TxRx(&TxRx.airmode, &TxRx.throttle, &TxRx.pitch_setpoint,
 				&TxRx.roll_setpoint, &TxRx.yaw_setpoint, TxRx.roll, TxRx.pitch,
 				TxRx.yaw);
+
+		//xQueueSend(RadioData_To_CL_Queue, (void * ) &TxRx, 1);
 	    xSemaphoreGive(RFDataMutexHandle);
 		}
   /* USER CODE END StartNRF24 */
